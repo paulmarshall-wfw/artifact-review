@@ -11,14 +11,14 @@ Artifact Review uses a local TypeScript service as the only HTTP API boundary fo
 | `GET` | `/api/setup-readiness` | Combines database, provider, and workflow readiness checks. |
 | `GET` | `/api/provider-readiness` | Reports registry/profile/task/schema/fallback/demo readiness. |
 | `GET` | `/api/provider-readiness/tasks/:taskKey` | Reports provider readiness in the context of a task key. |
-| `GET` | `/api/documents` | Returns an empty document list until repositories are implemented. |
-| `GET` | `/api/documents/:documentId` | Returns `404 document_not_found` until persistence is implemented. |
+| `GET` | `/api/documents` | Returns repository-backed document summaries when `DATABASE_URL` is configured; otherwise returns an empty list. |
+| `GET` | `/api/documents/:documentId` | Returns repository-backed document, versions, and review components when present; otherwise returns `404 document_not_found`. |
 | `POST` | `/api/ingest/file` | Returns `409 workflow_not_configured` until workflow import/activation exists. |
 | `POST` | `/api/ingest/url` | Returns `409 workflow_not_configured` until workflow import/activation exists. |
 | `POST` | `/api/components/:componentId/ai-suggestions` | Blocks when provider readiness fails; otherwise returns `501 provider_runtime_not_wired`. |
 | `POST` | `/api/ai-suggestions/:suggestionId/accept` | Returns `501 suggestion_accept_not_wired`. |
 | `POST` | `/api/ai-suggestions/:suggestionId/reject` | Returns `501 suggestion_reject_not_wired`. |
-| `GET` | `/api/task-runs/:taskRunId` | Returns `404 task_run_not_found`. |
+| `GET` | `/api/task-runs/:taskRunId` | Returns repository-backed task-run provenance when present; otherwise returns `404 task_run_not_found`. |
 
 Any other `/api` route currently returns `501 not_implemented`.
 

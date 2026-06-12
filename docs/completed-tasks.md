@@ -4,6 +4,11 @@ Append brief entries here when project work is completed. Keep this file concise
 
 ## 2026-06-12
 
+- Task: Start Build Slice 1 persistence foundation.
+  Outcome: Added service startup migration lifecycle, transactional migration runner with checksum tracking, app repositories for documents, document versions, review components, app settings, task runs, and AI suggestions, and repository-backed document/task-run reads where the current API contract already reserves them.
+  Verification: `npm run verify` passed with 3 test files and 7 tests; sandboxed `npm run dev:service` hit the known `tsx` IPC `listen EPERM`, then approved local startup succeeded; `/health`, `/ready`, `/api/documents`, and `/api/setup-readiness` returned expected responses without `DATABASE_URL`.
+  Traceability: Git branch `main`; no commit yet; changed service persistence code, tests, and docs.
+
 - Task: Align MVP plan with provider registry integration review.
   Outcome: Updated the MVP plan to define Artifact Review as an `invoke-providers-for-tasks` target app with explicit provider runtime boundaries, named tasks, readiness checks, proposal-only AI suggestions, workflow boundaries, UI placement, and review-driven tests.
   Verification: Documentation consistency pass completed; no automated tests run because this was a documentation-only update.

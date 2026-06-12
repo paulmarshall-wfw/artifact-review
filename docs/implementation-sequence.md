@@ -21,10 +21,17 @@ Completed:
 
 Purpose: make the service safely own app data.
 
+Completed:
+
 - Add migration runner.
 - Add database lifecycle helpers for startup and shutdown.
 - Add repositories for documents, document versions, review components, app settings, task runs, and AI suggestions.
-- Add repository tests against isolated Postgres or deterministic test database setup.
+- Add deterministic migration-loader and repository tests that run in the default verification path.
+
+Remaining:
+
+- Run and validate migrations/repositories against an isolated configured Postgres database.
+- Wire repositories into ingest and review mutation flows in later slices.
 - Keep raw provider secrets out of Postgres.
 
 ## Build Slice 2: Workflow Operations

@@ -9,7 +9,7 @@ As of 2026-06-12:
 - `npm install` completes and generates `package-lock.json`.
 - `npm audit --json` reports zero vulnerabilities.
 - `npm run verify` passes.
-- Current automated tests: parser stability and provider readiness policy.
+- Current automated tests: parser stability, provider readiness policy, migration-file loading, and repository mapping/query behavior.
 - `npm run dev:service` starts the service on `127.0.0.1:4793` when allowed to bind local IPC/ports.
 - `/health` returns liveness; `/ready` and `/api/setup-readiness` return expected setup blockers when env is not configured.
 
@@ -28,8 +28,8 @@ As of 2026-06-12:
 
 Implement these before or with the related feature slices:
 
-- migration runner applies migrations in order and is idempotent
-- repository tests for documents, document versions, components, task runs, suggestions, and app settings
+- migration runner applies migrations in order and is idempotent against isolated Postgres
+- database-backed repository tests for documents, document versions, components, task runs, suggestions, and app settings
 - parser tests for `txt`, `md`, `html`, `htm`, and URL snapshot inputs
 - component ID stability across autosave and save
 - no active workflow blocks ingest with setup guidance

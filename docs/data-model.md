@@ -7,7 +7,7 @@ Artifact Review stores app-owned domain state in Postgres through `DATABASE_URL`
 - `service/migrations/001_initial_schema.sql`
 - `service/migrations/002_review_and_provider_records.sql`
 
-There is not yet a migration runner. Wiring one is the first implementation slice before repository work.
+`service/src/db/migrations.ts` now loads numbered SQL files in lexical order, records applied checksums in `schema_migrations`, and applies unapplied migrations inside database transactions during service startup when `DATABASE_URL` is configured.
 
 ## Document And Review Tables
 
@@ -61,10 +61,15 @@ The `ingestion` state is internal. It is an entry state for parsing/setup work a
 
 ## First Repository Responsibilities
 
-The first data implementation slice should add:
+The first data implementation slice now includes:
 
 - migration runner
 - database connection lifecycle
 - repository interfaces for documents, versions, components, suggestions, task runs, and app settings
-- deterministic fixtures for parser and repository tests
+- deterministic repository and migration-loader tests that run without a shared dev database
+
+Still remaining after the initial persistence foundation:
+
+- database-backed migration/repository verification against an isolated configured Postgres database
 - workflow storage adapter for document lifecycle state
+- repository-backed ingest and review mutation endpoints
