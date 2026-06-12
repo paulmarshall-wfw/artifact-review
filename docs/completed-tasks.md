@@ -4,6 +4,11 @@ Append brief entries here when project work is completed. Keep this file concise
 
 ## 2026-06-12
 
+- Task: Add workflow endpoint coverage and first `txt` ingest.
+  Outcome: Added in-process HTTP endpoint tests for workflow validation, activation, status, allowed actions, invalid transitions, and file ingest; implemented `txt` ingest to create a document, version `1`, stable sentence components with source ranges, parser metadata, and the active workflow entry state.
+  Verification: `npm run verify` passed with 6 test files, 1 skipped Postgres suite, 16 tests passed, and 2 skipped.
+  Traceability: Git branch `main` at `46a1690`; no commit yet; changed service parser/HTTP code, HTTP tests, parser tests, and docs.
+
 - Task: Refresh completed-task ledger and handoff after workflow operations.
   Outcome: Confirmed the build-work ledger entry was already present, appended this concise continuity refresh entry, and refreshed `handoff.md` as the current dirty-tree checkpoint without duplicating completed-task history.
   Verification: `git status --short --branch` and current `handoff.md`/`docs/completed-tasks.md` inspection completed; no build or test commands rerun because this was documentation-only continuity work.

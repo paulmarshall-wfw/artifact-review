@@ -6,6 +6,10 @@ export type ReviewComponent = {
   id: string;
   kind: ReviewComponentKind;
   sectionId: string;
+  sourceRange: {
+    start: number;
+    end: number;
+  };
   text: string;
   originalTextHash: string;
 };
@@ -19,17 +23,32 @@ function stableId(prefix: string, text: string, index: number): string {
 }
 
 export function parsePlainTextToComponents(source: string): ReviewComponent[] {
-  const sentences = source
-    .split(/(?<=[.!?])\s+/)
-    .map((text) => text.trim())
-    .filter(Boolean);
+  const components: ReviewComponent[] = [];
+  const sentenceMatches = source.matchAll(/[^.!?]+[.!?]?/g);
 
-  return sentences.map((text, index) => ({
-    id: stableId("sentence", text, index),
-    kind: "paragraph_sentence",
-    sectionId: "root",
-    text,
-    originalTextHash: hashText(text)
-  }));
+  for (const match of sentenceMatches) {
+    const rawText = match[0];
+    const leadingWhitespace = rawText.match(/^\s*/)?.[0].length ?? 0;
+    const trailingWhitespace = rawText.match(/\s*$/)?.[0].length ?? 0;
+    const text = rawText.trim();
+
+    if (!text) {
+      continue;
+    }
+
+    const start = (match.index ?? 0) + leadingWhitespace;
+    const end = (match.index ?? 0) + rawText.length - trailingWhitespace;
+    const index = components.length;
+
+    components.push({
+      id: stableId("sentence", text, index),
+      kind: "paragraph_sentence",
+      sectionId: "root",
+      sourceRange: { start, end },
+      text,
+      originalTextHash: hashText(text)
+    });
+  }
+
+  return components;
 }
-

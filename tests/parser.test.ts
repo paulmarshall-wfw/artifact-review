@@ -9,6 +9,9 @@ describe("plain text parser", () => {
     expect(first).toHaveLength(2);
     expect(first.map((component) => component.id)).toEqual(second.map((component) => component.id));
     expect(first[0]?.kind).toBe("paragraph_sentence");
+    expect(first.map((component) => component.sourceRange)).toEqual([
+      { start: 0, end: 13 },
+      { start: 14, end: 31 }
+    ]);
   });
 });
-

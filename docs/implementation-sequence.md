@@ -44,6 +44,7 @@ Completed:
 - Implement explicit activation storage for a user-provided document workflow.
 - Add service endpoints for active workflow status and allowed document actions.
 - Add service-side transition rejection for actions not allowed from the document's current state.
+- Add HTTP-level tests for workflow validation, activation, allowed actions, and invalid transition rejection.
 
 Remaining:
 
@@ -54,11 +55,16 @@ Remaining:
 
 Purpose: create reviewable documents without provider dependency.
 
+Completed:
+
 - Implement file ingest for `txt`.
-- Add stable component IDs and source mappings.
+- Add stable sentence component IDs and source mappings.
+- Store document version `1`, review components, parser metadata, and initial workflow state from the active workflow entry state.
+
+Remaining:
+
 - Add `md`, then `html` and `htm` ingest.
 - Add URL snapshot ingest after local file formats are stable.
-- Store document versions and review components.
 - Autosave staged review changes.
 
 ## Build Slice 4: Review Mutation Surface

@@ -51,6 +51,8 @@ Artifact Review stores app-owned domain state in Postgres through `DATABASE_URL`
 
 Artifact Review owns document workflow state in its own database. Active document workflow definitions are currently stored under the app setting key `activeDocumentWorkflowDefinition`; document rows store their current workflow state in `documents.current_workflow_item_ref`.
 
+The first `txt` ingest path now creates a document row, version `1`, and stable sentence review components in one service operation. Review components preserve source offsets in `review_components.source_range` and keep the original text hash beside the current text so later review mutations can be audited against the imported source.
+
 The `state-workflow-runtime` storage adapter has not been installed or wired yet. Until then, the service validates the same explicit workflow shape and derives allowed user actions from the active app-owned definition.
 
 The repo-stored workflow definition is an importable fixture:
@@ -70,7 +72,8 @@ The first data implementation slice now includes:
 - repository interfaces for documents, versions, components, suggestions, task runs, and app settings
 - deterministic repository and migration-loader tests that run without a shared dev database
 
-Still remaining after the initial persistence foundation:
+Still remaining after the initial persistence foundation and first `txt` ingest:
 
 - workflow storage adapter for document lifecycle state
-- repository-backed ingest and review mutation endpoints
+- `md`, `html`, `htm`, and URL snapshot ingest
+- review mutation endpoints

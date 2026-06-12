@@ -1,9 +1,11 @@
 import cors from "cors";
 import express from "express";
 import type pg from "pg";
+import { z } from "zod";
 import type { AppConfig } from "../config/env.js";
 import { checkDatabase } from "../db/pool.js";
 import { combineReadiness } from "../domain/readiness.js";
+import { parsePlainTextToComponents } from "../domain/parser.js";
 import { buildProviderReadiness } from "../providers/readiness.js";
 import { createRepositories } from "../repositories/index.js";
 import {
@@ -14,6 +16,12 @@ import {
   validateDocumentWorkflowDefinition
 } from "../workflow/definition.js";
 import { buildWorkflowReadiness } from "../workflow/readiness.js";
+
+const fileIngestRequestSchema = z.object({
+  name: z.string().min(1),
+  format: z.literal("txt"),
+  content: z.string().min(1)
+});
 
 export function createServer(config: AppConfig, pool: pg.Pool | null) {
   const app = express();
@@ -242,10 +250,79 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
     });
   });
 
-  app.post("/api/ingest/file", (_request, response) => {
-    response.status(409).json({
-      error: "workflow_not_configured",
-      message: "Import or activate a user-provided document workflow before ingest."
+  app.post("/api/ingest/file", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before ingesting files."
+      });
+      return;
+    }
+
+    const activeWorkflow = await repositories.workflows.getActiveDocumentWorkflow();
+    if (!activeWorkflow) {
+      response.status(409).json({
+        error: "workflow_not_configured",
+        message: "Import or activate a user-provided document workflow before ingest."
+      });
+      return;
+    }
+
+    const parsedRequest = fileIngestRequestSchema.safeParse(request.body);
+    if (!parsedRequest.success) {
+      response.status(422).json({
+        error: "invalid_ingest_file_request",
+        issues: parsedRequest.error.issues.map((issue) => `${issue.path.join(".") || "request"}: ${issue.message}`)
+      });
+      return;
+    }
+
+    const parsedComponents = parsePlainTextToComponents(parsedRequest.data.content);
+    if (parsedComponents.length === 0) {
+      response.status(422).json({
+        error: "no_reviewable_components",
+        message: "The file content did not contain reviewable text components."
+      });
+      return;
+    }
+
+    const initialState = getEntryState(activeWorkflow);
+    const document = await repositories.documents.createDocument({
+      name: parsedRequest.data.name,
+      sourceType: "file",
+      originalFormat: "txt",
+      currentWorkflowItemRef: initialState
+    });
+    const version = await repositories.documents.createDocumentVersion({
+      documentId: document.id,
+      versionNumber: 1,
+      sourceSnapshot: parsedRequest.data.content,
+      currentSnapshot: parsedRequest.data.content,
+      parserMetadata: {
+        parser: "plain-text-sentences",
+        componentCount: parsedComponents.length
+      }
+    });
+    const components = await repositories.documents.createReviewComponents(
+      parsedComponents.map((component) => ({
+        id: component.id,
+        documentId: document.id,
+        kind: component.kind,
+        sectionId: component.sectionId,
+        sourceRange: component.sourceRange,
+        currentText: component.text,
+        originalTextHash: component.originalTextHash
+      }))
+    );
+
+    response.status(201).json({
+      document,
+      version,
+      components,
+      workflow: {
+        currentState: initialState,
+        actions: getAllowedWorkflowActions(activeWorkflow, initialState)
+      }
     });
   });
 
