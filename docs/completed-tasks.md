@@ -4,6 +4,16 @@ Append brief entries here when project work is completed. Keep this file concise
 
 ## 2026-06-12
 
+- Task: Continue Build Slice 3 with URL snapshot ingest.
+  Outcome: Implemented `/api/ingest/url` as a repository-backed URL snapshot ingest path; it now requires database and active workflow readiness, accepts caller-supplied snapshot HTML or fetches `http`/`https` URLs, reuses the HTML parser, stores document/version/component records with `sourceType: "url"` and `originalFormat: "url_snapshot"`, and records URL/fetch parser metadata.
+  Verification: `npm run verify` passed with 6 test files, 1 skipped Postgres suite, 25 tests passed, and 2 skipped; lint and Vite build also passed.
+  Traceability: Git branch `main` at `935d185`; no commit yet; changed URL ingest service code, HTTP ingest tests, API/data/implementation/verification docs, completed-task ledger, and handoff.
+
+- Task: Continue Build Slice 3 with HTML/HTM ingest.
+  Outcome: Added HTML/HTM file ingest beside existing plain-text and Markdown ingest; HTML parsing now creates stable paragraph sentence, HTML list item, and table body row components with source ranges, decodes common entities, ignores script/style content, and uses headings as section anchors rather than inline review targets.
+  Verification: `npm run verify` passed with 6 test files, 1 skipped Postgres suite, 22 tests passed, and 2 skipped; lint and Vite build also passed.
+  Traceability: Git branch `main` at `935d185`; no commit yet; changed HTML parser/HTTP ingest code, parser and HTTP ingest tests, API/data/implementation/verification docs, completed-task ledger, and handoff.
+
 - Task: Continue Build Slice 3 with Markdown ingest.
   Outcome: Added Markdown file ingest beside existing plain-text ingest; Markdown parsing now creates stable heading, prose sentence, and bullet components with source ranges and section anchors while preserving original format and parser metadata in repository-backed document/version records.
   Verification: `npm run verify` passed with 6 test files, 1 skipped Postgres suite, 19 tests passed, and 2 skipped.

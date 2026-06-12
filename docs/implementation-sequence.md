@@ -62,11 +62,13 @@ Completed:
 - Store document version `1`, review components, parser metadata, and initial workflow state from the active workflow entry state.
 - Implement file ingest for `md`.
 - Add stable Markdown heading, prose sentence, and bullet components with source mappings.
+- Implement file ingest for `html` and `htm`.
+- Add stable HTML paragraph sentence, list item, and table body row components with source mappings and heading section anchors.
+- Implement URL snapshot ingest.
+- Add repository-backed URL snapshot document/version/component creation using the HTML parser, including caller-supplied snapshot HTML and service-side URL fetch paths.
 
 Remaining:
 
-- Add `html` and `htm` ingest.
-- Add URL snapshot ingest after local file formats are stable.
 - Autosave staged review changes.
 
 ## Build Slice 4: Review Mutation Surface

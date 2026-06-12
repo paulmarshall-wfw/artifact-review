@@ -9,7 +9,7 @@ As of 2026-06-12:
 - `npm install` completes and generates `package-lock.json`.
 - `npm audit --json` reports zero vulnerabilities.
 - `npm run verify` passes.
-- Current automated tests: parser stability and source ranges, provider readiness policy, migration-file loading, repository mapping/query behavior, workflow HTTP endpoints, and `txt`/`md` file ingest HTTP behavior.
+- Current automated tests: parser stability and source ranges, provider readiness policy, migration-file loading, repository mapping/query behavior, workflow HTTP endpoints, `txt`/`md`/`html`/`htm` file ingest HTTP behavior, and URL snapshot ingest HTTP behavior.
 - `npm run dev:service` starts the service on `127.0.0.1:4793` when allowed to bind local IPC/ports.
 - `/health` returns liveness; `/ready` and `/api/setup-readiness` return expected setup blockers when env is not configured.
 
@@ -35,7 +35,6 @@ The test creates a temporary schema named `artifact_review_test_<uuid>`, runs mi
 
 Implement these before or with the related feature slices:
 
-- parser tests for `html`, `htm`, and URL snapshot inputs
 - component ID stability across autosave and save
 - registry unavailable blocks provider-backed actions with a readiness reason
 - saved missing `selectedProviderProfileKey` does not fall back to `INVOKE_PROVIDERS_PROFILE`

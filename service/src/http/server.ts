@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { AppConfig } from "../config/env.js";
 import { checkDatabase } from "../db/pool.js";
 import { combineReadiness } from "../domain/readiness.js";
-import { parseMarkdownToComponents, parsePlainTextToComponents } from "../domain/parser.js";
+import { parseHtmlToComponents, parseMarkdownToComponents, parsePlainTextToComponents } from "../domain/parser.js";
 import { buildProviderReadiness } from "../providers/readiness.js";
 import { createRepositories } from "../repositories/index.js";
 import {
@@ -19,11 +19,28 @@ import { buildWorkflowReadiness } from "../workflow/readiness.js";
 
 const fileIngestRequestSchema = z.object({
   name: z.string().min(1),
-  format: z.enum(["txt", "md"]),
+  format: z.enum(["txt", "md", "html", "htm"]),
   content: z.string().min(1)
 });
 
-function parseFileContent(format: "txt" | "md", content: string) {
+const urlIngestRequestSchema = z.object({
+  url: z.string().url(),
+  name: z.string().min(1).optional(),
+  snapshotHtml: z.string().min(1).optional()
+});
+
+function parseFileContent(format: "txt" | "md" | "html" | "htm", content: string) {
+  if (format === "html" || format === "htm") {
+    const components = parseHtmlToComponents(content);
+    return {
+      components,
+      parserMetadata: {
+        parser: "html-components",
+        componentCount: components.length
+      }
+    };
+  }
+
   if (format === "md") {
     const components = parseMarkdownToComponents(content);
     return {
@@ -41,6 +58,64 @@ function parseFileContent(format: "txt" | "md", content: string) {
     parserMetadata: {
       parser: "plain-text-sentences",
       componentCount: components.length
+    }
+  };
+}
+
+function parseUrlSnapshotContent(
+  url: string,
+  content: string,
+  snapshotSource: "provided" | "fetched",
+  fetchMetadata: { status?: number; contentType?: string; finalUrl?: string } = {}
+) {
+  const components = parseHtmlToComponents(content);
+  return {
+    components,
+    parserMetadata: {
+      parser: "url-html-snapshot",
+      componentCount: components.length,
+      sourceUrl: url,
+      snapshotSource,
+      ...fetchMetadata
+    }
+  };
+}
+
+function validateHttpUrl(url: string): URL | null {
+  try {
+    const parsedUrl = new URL(url);
+    return parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:" ? parsedUrl : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchUrlSnapshot(url: string): Promise<{
+  content: string;
+  metadata: {
+    status: number;
+    contentType: string;
+    finalUrl: string;
+  };
+}> {
+  const fetchResponse = await fetch(url, {
+    redirect: "follow",
+    headers: {
+      accept: "text/html,application/xhtml+xml;q=0.9,text/plain;q=0.5,*/*;q=0.1"
+    }
+  });
+  const content = await fetchResponse.text();
+
+  if (!fetchResponse.ok) {
+    throw new Error(`URL snapshot request failed with HTTP ${fetchResponse.status}.`);
+  }
+
+  return {
+    content,
+    metadata: {
+      status: fetchResponse.status,
+      contentType: fetchResponse.headers.get("content-type") ?? "",
+      finalUrl: fetchResponse.url || url
     }
   };
 }
@@ -346,10 +421,106 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
     });
   });
 
-  app.post("/api/ingest/url", (_request, response) => {
-    response.status(409).json({
-      error: "workflow_not_configured",
-      message: "Import or activate a user-provided document workflow before ingest."
+  app.post("/api/ingest/url", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before ingesting URL snapshots."
+      });
+      return;
+    }
+
+    const activeWorkflow = await repositories.workflows.getActiveDocumentWorkflow();
+    if (!activeWorkflow) {
+      response.status(409).json({
+        error: "workflow_not_configured",
+        message: "Import or activate a user-provided document workflow before ingest."
+      });
+      return;
+    }
+
+    const parsedRequest = urlIngestRequestSchema.safeParse(request.body);
+    if (!parsedRequest.success) {
+      response.status(422).json({
+        error: "invalid_ingest_url_request",
+        issues: parsedRequest.error.issues.map((issue) => `${issue.path.join(".") || "request"}: ${issue.message}`)
+      });
+      return;
+    }
+
+    const parsedUrl = validateHttpUrl(parsedRequest.data.url);
+    if (!parsedUrl) {
+      response.status(422).json({
+        error: "invalid_ingest_url_request",
+        issues: ["url: URL must use http or https."]
+      });
+      return;
+    }
+
+    let snapshotContent = parsedRequest.data.snapshotHtml;
+    let snapshotSource: "provided" | "fetched" = "provided";
+    let fetchMetadata: { status?: number; contentType?: string; finalUrl?: string } = {};
+
+    if (!snapshotContent) {
+      snapshotSource = "fetched";
+      try {
+        const snapshot = await fetchUrlSnapshot(parsedUrl.toString());
+        snapshotContent = snapshot.content;
+        fetchMetadata = snapshot.metadata;
+      } catch (error) {
+        response.status(502).json({
+          error: "url_snapshot_fetch_failed",
+          url: parsedUrl.toString(),
+          message: error instanceof Error ? error.message : "URL snapshot request failed."
+        });
+        return;
+      }
+    }
+
+    const parsedSnapshot = parseUrlSnapshotContent(parsedUrl.toString(), snapshotContent, snapshotSource, fetchMetadata);
+    const parsedComponents = parsedSnapshot.components;
+    if (parsedComponents.length === 0) {
+      response.status(422).json({
+        error: "no_reviewable_components",
+        message: "The URL snapshot did not contain reviewable text components."
+      });
+      return;
+    }
+
+    const initialState = getEntryState(activeWorkflow);
+    const document = await repositories.documents.createDocument({
+      name: parsedRequest.data.name ?? parsedUrl.toString(),
+      sourceType: "url",
+      originalFormat: "url_snapshot",
+      currentWorkflowItemRef: initialState
+    });
+    const version = await repositories.documents.createDocumentVersion({
+      documentId: document.id,
+      versionNumber: 1,
+      sourceSnapshot: snapshotContent,
+      currentSnapshot: snapshotContent,
+      parserMetadata: parsedSnapshot.parserMetadata
+    });
+    const components = await repositories.documents.createReviewComponents(
+      parsedComponents.map((component) => ({
+        id: component.id,
+        documentId: document.id,
+        kind: component.kind,
+        sectionId: component.sectionId,
+        sourceRange: component.sourceRange,
+        currentText: component.text,
+        originalTextHash: component.originalTextHash
+      }))
+    );
+
+    response.status(201).json({
+      document,
+      version,
+      components,
+      workflow: {
+        currentState: initialState,
+        actions: getAllowedWorkflowActions(activeWorkflow, initialState)
+      }
     });
   });
 

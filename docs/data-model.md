@@ -51,7 +51,7 @@ Artifact Review stores app-owned domain state in Postgres through `DATABASE_URL`
 
 Artifact Review owns document workflow state in its own database. Active document workflow definitions are currently stored under the app setting key `activeDocumentWorkflowDefinition`; document rows store their current workflow state in `documents.current_workflow_item_ref`.
 
-The file ingest path now creates a document row, version `1`, and stable review components in one service operation for `txt` and `md` files. Plain text creates sentence components. Markdown creates heading, sentence, and bullet components while using headings as section anchors for following content. Review components preserve source offsets in `review_components.source_range` and keep the original text hash beside the current text so later review mutations can be audited against the imported source.
+The ingest path now creates a document row, version `1`, and stable review components in one service operation for local `txt`, `md`, `html`, and `htm` files plus URL snapshots. Plain text creates sentence components. Markdown creates heading, sentence, and bullet components while using headings as section anchors for following content. HTML, HTM, and URL snapshots create paragraph sentence, list item, and table body row components while using headings as section anchors rather than inline review targets. URL snapshots store `documents.source_type = "url"`, `documents.original_format = "url_snapshot"`, and parser metadata containing the source URL, snapshot source (`provided` or `fetched`), and fetch metadata when applicable. Review components preserve source offsets in `review_components.source_range` and keep the original text hash beside the current text so later review mutations can be audited against the imported source.
 
 The `state-workflow-runtime` storage adapter has not been installed or wired yet. Until then, the service validates the same explicit workflow shape and derives allowed user actions from the active app-owned definition.
 
@@ -72,8 +72,7 @@ The first data implementation slice now includes:
 - repository interfaces for documents, versions, components, suggestions, task runs, and app settings
 - deterministic repository and migration-loader tests that run without a shared dev database
 
-Still remaining after the initial persistence foundation and first `txt`/`md` ingest:
+Still remaining after the initial persistence foundation and ingest slices:
 
 - workflow storage adapter for document lifecycle state
-- `html`, `htm`, and URL snapshot ingest
 - review mutation endpoints

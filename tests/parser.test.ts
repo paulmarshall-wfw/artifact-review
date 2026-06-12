@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMarkdownToComponents, parsePlainTextToComponents } from "../service/src/domain/parser";
+import { parseHtmlToComponents, parseMarkdownToComponents, parsePlainTextToComponents } from "../service/src/domain/parser";
 
 describe("plain text parser", () => {
   it("creates stable component ids from sentence content", () => {
@@ -57,5 +57,57 @@ describe("markdown parser", () => {
       { start: 3, end: 8 },
       { start: 16, end: 26 }
     ]);
+  });
+});
+
+describe("html parser", () => {
+  it("uses headings as section anchors and creates stable review components with source ranges", () => {
+    const source = [
+      "<article>",
+      "<h1>Review Plan</h1>",
+      "<p>First <strong>HTML</strong> sentence. Second&nbsp;item?</p>",
+      "<ul><li>Keep source ranges</li><li>Decode &amp; preserve text</li></ul>",
+      "<table>",
+      "<thead><tr><th>Name</th><th>Status</th></tr></thead>",
+      "<tbody><tr><td>Clause A</td><td>Ready.</td></tr></tbody>",
+      "</table>",
+      "</article>"
+    ].join("");
+    const first = parseHtmlToComponents(source);
+    const second = parseHtmlToComponents(source);
+
+    expect(first.map((component) => component.id)).toEqual(second.map((component) => component.id));
+    expect(first.map((component) => component.kind)).toEqual([
+      "paragraph_sentence",
+      "paragraph_sentence",
+      "html_list_item",
+      "html_list_item",
+      "table_row"
+    ]);
+    expect(first.map((component) => component.text)).toEqual([
+      "First HTML sentence.",
+      "Second item?",
+      "Keep source ranges",
+      "Decode & preserve text",
+      "Clause A Ready."
+    ]);
+    expect(first.map((component) => component.sourceRange)).toEqual([
+      { start: source.indexOf("First"), end: source.indexOf(" sentence.") + " sentence.".length },
+      { start: source.indexOf("Second"), end: source.indexOf("item?") + "item?".length },
+      { start: source.indexOf("Keep"), end: source.indexOf("ranges") + "ranges".length },
+      { start: source.indexOf("Decode"), end: source.indexOf("text") + "text".length },
+      { start: source.indexOf("Clause A"), end: source.indexOf("Ready.") + "Ready.".length }
+    ]);
+    expect(first.every((component) => component.sectionId !== "root")).toBe(true);
+    expect(new Set(first.map((component) => component.sectionId)).size).toBe(1);
+  });
+
+  it("ignores script and style content", () => {
+    const components = parseHtmlToComponents(
+      "<style><p>Hidden style sentence.</p></style><script><p>Hidden script sentence.</p></script><p>Visible sentence.</p>"
+    );
+
+    expect(components).toHaveLength(1);
+    expect(components[0]?.text).toBe("Visible sentence.");
   });
 });
