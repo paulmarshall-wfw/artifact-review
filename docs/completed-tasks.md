@@ -23,3 +23,8 @@ Append brief entries here when project work is completed. Keep this file concise
   Outcome: Installed dependencies, generated `package-lock.json`, added Vite env typing, patched Vite and Vitest to non-vulnerable numbered versions, corrected the workflow fixture so internal `ingestion` documents stay out of the visible `Needs Review` bucket, and added API, data model, setup/readiness, verification, and implementation-sequence documents.
   Verification: `npm audit --json` reported zero vulnerabilities; `node` JSON parse of `docs/workflow/artifact-review-0.1.0-state-workflow-definition.json` passed; `npm run verify` passed with 2 test files and 3 tests; `npm run dev:service` started the service and `/health`, `/ready`, and `/api/setup-readiness` returned expected responses.
   Traceability: Git branch `main` at `3d47cd2`; no commit yet; changed `README.md`, `docs/workflow/artifact-review-0.1.0-state-workflow-definition.json`, `package.json`, and added pre-build docs, `package-lock.json`, and `src/vite-env.d.ts`.
+
+- Task: Refresh continuity documents after pre-build commit.
+  Outcome: Updated `handoff.md` to describe committed baseline `5cc1f22` and recorded this completed-task ledger refresh without duplicating completed work history in the handoff.
+  Verification: Git status was clean at `5cc1f22` before the continuity refresh; no build or test commands were rerun because only continuity documents changed.
+  Traceability: Git branch `main` at `5cc1f22`; changed `handoff.md` and `docs/completed-tasks.md`.

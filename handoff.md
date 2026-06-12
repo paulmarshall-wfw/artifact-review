@@ -4,30 +4,23 @@
 
 - Project name: Artifact Review
 - Handoff type: implementation handoff
-- Created timestamp UTC: 2026-06-12T06:04:23Z
+- Created timestamp UTC: 2026-06-12T06:27:15Z
 - Prepared by: Codex
 - Repository, workspace, or folder: `/Users/paulmarshall/Software Development/artifact-review`
-- Branch or working context: Git branch `main`; current HEAD `3d47cd2`
-- Session scope: pre-build readiness baseline, dependency verification, pre-build contract documents, workflow fixture alignment, completed-task ledger refresh, and current-state handoff refresh
+- Branch or working context: Git branch `main`; current HEAD `5cc1f22`
+- Session scope: continuity refresh after committed pre-build readiness baseline
 
 ### Checkpoint Status
 
-- Git HEAD: `3d47cd2`
+- Git HEAD: `5cc1f22`
 - Working tree: dirty
 - Dirty files intentionally in scope:
-  - `README.md`
-  - `docs/workflow/artifact-review-0.1.0-state-workflow-definition.json`
-  - `package.json`
+  - `docs/completed-tasks.md`
+  - `handoff.md`
 - Dirty files intentionally out of scope:
   - None
 - Untracked files intentionally in scope:
-  - `docs/api-contract.md`
-  - `docs/data-model.md`
-  - `docs/implementation-sequence.md`
-  - `docs/setup-readiness.md`
-  - `docs/verification-plan.md`
-  - `package-lock.json`
-  - `src/vite-env.d.ts`
+  - None
 - Untracked files intentionally out of scope:
   - Ignored `.DS_Store` files under the repo are not part of the bootstrap
 - Canonical files described:
@@ -47,11 +40,11 @@
   - `handoff.md`
 - Last verification:
   - command: `npm install`; `npm audit --json`; `node` JSON parse of `docs/workflow/artifact-review-0.1.0-state-workflow-definition.json`; `npm run verify`; `npm run dev:service`; `curl -sS http://127.0.0.1:4793/health`; `curl -sS http://127.0.0.1:4793/ready`; `curl -sS http://127.0.0.1:4793/api/setup-readiness`
-  - result: passed; npm audit reported zero vulnerabilities; `npm run verify` passed with 2 test files and 3 tests; service health returned `status: ok`; readiness returned expected missing `DATABASE_URL`, provider, and workflow setup blockers
+  - result: passed before commit `5cc1f22`; npm audit reported zero vulnerabilities; `npm run verify` passed with 2 test files and 3 tests; service health returned `status: ok`; readiness returned expected missing `DATABASE_URL`, provider, and workflow setup blockers; not rerun for this continuity-only refresh
   - timestamp UTC: 2026-06-12T06:04:23Z
 - Handoff freshness: fresh-to-dirty-tree
-- Safe-to-continue basis: dependencies are installed, lockfile exists, the workflow fixture parses as JSON, and the root verification path passes
-- Next checkpoint action: start Build Slice 1 from `docs/implementation-sequence.md`, or commit the current pre-build baseline if requested
+- Safe-to-continue basis: committed baseline `5cc1f22` contains the verified pre-build readiness work; current dirty state is limited to this handoff and completed-task ledger refresh
+- Next checkpoint action: commit the continuity-doc refresh if desired, or start Build Slice 1 from `docs/implementation-sequence.md`
 
 ## 2. Executive Summary
 
@@ -59,7 +52,7 @@ Artifact Review is now past the pre-build readiness checkpoint. The stack, root 
 
 Complete now: dependency install, lockfile generation, Vite/Vitest security patch, Vite env typing, passing full verification, workflow fixture alignment with UI notes, and pre-build contract documents.
 
-Incomplete now: real provider registry client wiring is still a stub, workflow import/activation is not implemented, document ingest/export are not implemented, repositories are not implemented, and no commit has been made for this readiness pass.
+Incomplete now: real provider registry client wiring is still a stub, workflow import/activation is not implemented, document ingest/export are not implemented, and repositories are not implemented.
 
 The current state is safe to continue from as a verified pre-build checkpoint.
 
@@ -78,6 +71,7 @@ Definition of done for the next workstream: `npm run verify` passes, database-ba
 ### Working
 
 - Git repo exists on branch `main`.
+- Pre-build readiness baseline is committed at `5cc1f22`.
 - Root scripts are defined in `package.json`.
 - Dependencies are installed and `package-lock.json` exists.
 - Tauri/Vite UI port is fixed at `127.0.0.1:5182`.
@@ -147,14 +141,15 @@ Prerequisites:
 
 Most recent verified command results:
 
-- `npm install`: passed
-- `npm audit --json`: passed with zero vulnerabilities
-- `node` JSON parse of `docs/workflow/artifact-review-0.1.0-state-workflow-definition.json`: passed
-- `npm run verify`: passed with 2 test files and 3 tests
-- `npm run dev:service`: passed after local execution approval; sandboxed start failed first with `listen EPERM` on tsx IPC
-- `GET /health`: passed with `status: ok`
-- `GET /ready`: passed with expected `DATABASE_URL is not configured.`
-- `GET /api/setup-readiness`: passed with expected database, provider, demo-mode, and workflow setup blockers
+- Commit `5cc1f22`: documents the pre-build readiness and workflow baseline.
+- `npm install`: passed before `5cc1f22`.
+- `npm audit --json`: passed with zero vulnerabilities before `5cc1f22`.
+- `node` JSON parse of `docs/workflow/artifact-review-0.1.0-state-workflow-definition.json`: passed before `5cc1f22`.
+- `npm run verify`: passed with 2 test files and 3 tests before `5cc1f22`.
+- `npm run dev:service`: passed before `5cc1f22` after local execution approval; sandboxed start failed first with `listen EPERM` on tsx IPC.
+- `GET /health`: passed with `status: ok` before `5cc1f22`.
+- `GET /ready`: passed with expected `DATABASE_URL is not configured.` before `5cc1f22`.
+- `GET /api/setup-readiness`: passed with expected database, provider, demo-mode, and workflow setup blockers before `5cc1f22`.
 
 Unverified areas:
 
@@ -192,7 +187,7 @@ Next:
 
 - Start Build Slice 1 from `docs/implementation-sequence.md`: migration runner, database lifecycle helpers, repositories, and repository tests.
 - Launch the service/UI and inspect readiness behavior when runtime validation is requested.
-- Commit the pre-build baseline only if requested.
+- Commit this continuity-doc refresh if a clean handoff checkpoint is desired.
 
 Blocked:
 
