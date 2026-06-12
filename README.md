@@ -6,6 +6,11 @@ The MVP is grounded by:
 
 - [Artifact Review MVP Plan](docs/Artifact%20Review%20MVP%20Plan.md)
 - [Provider Registry Integration Review](docs/artifact-review-provider-registry-integration-review.md)
+- [API Contract](docs/api-contract.md)
+- [Data Model](docs/data-model.md)
+- [Setup And Readiness](docs/setup-readiness.md)
+- [Verification Plan](docs/verification-plan.md)
+- [Implementation Sequence](docs/implementation-sequence.md)
 
 ## Stack
 
@@ -80,4 +85,3 @@ The initial test suite covers parser stability and provider readiness policy. Th
 - `GET /ready`
 - `GET /api/setup-readiness`
 - `GET /api/provider-readiness`
-

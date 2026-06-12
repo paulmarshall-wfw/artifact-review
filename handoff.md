@@ -4,42 +4,30 @@
 
 - Project name: Artifact Review
 - Handoff type: implementation handoff
-- Created timestamp UTC: 2026-06-12T03:28:41Z
+- Created timestamp UTC: 2026-06-12T06:04:23Z
 - Prepared by: Codex
 - Repository, workspace, or folder: `/Users/paulmarshall/Software Development/artifact-review`
-- Branch or working context: Git branch `main`; repository initialized but no commits exist yet
-- Session scope: MVP plan alignment, project bootstrap, completed-task ledger creation, and current-state handoff creation
+- Branch or working context: Git branch `main`; current HEAD `3d47cd2`
+- Session scope: pre-build readiness baseline, dependency verification, pre-build contract documents, workflow fixture alignment, completed-task ledger refresh, and current-state handoff refresh
 
 ### Checkpoint Status
 
-- Git HEAD: unavailable; repository has no commits yet
+- Git HEAD: `3d47cd2`
 - Working tree: dirty
 - Dirty files intentionally in scope:
-  - None; there are no tracked files yet
+  - `README.md`
+  - `docs/workflow/artifact-review-0.1.0-state-workflow-definition.json`
+  - `package.json`
 - Dirty files intentionally out of scope:
   - None
 - Untracked files intentionally in scope:
-  - `.editorconfig`
-  - `.env.example`
-  - `.gitattributes`
-  - `.github/workflows/verify.yml`
-  - `.gitignore`
-  - `AGENTS.md`
-  - `README.md`
-  - `docs/Artifact Review MVP Plan.md`
-  - `docs/architecture/bootstrap-architecture.md`
-  - `docs/artifact-review-provider-registry-integration-review.md`
-  - `docs/completed-tasks.md`
-  - `handoff.md`
-  - `index.html`
-  - `package.json`
-  - `scripts/doctor.mjs`
-  - `service/`
-  - `src-tauri/`
-  - `src/`
-  - `tests/`
-  - `tsconfig.json`
-  - `vite.config.ts`
+  - `docs/api-contract.md`
+  - `docs/data-model.md`
+  - `docs/implementation-sequence.md`
+  - `docs/setup-readiness.md`
+  - `docs/verification-plan.md`
+  - `package-lock.json`
+  - `src/vite-env.d.ts`
 - Untracked files intentionally out of scope:
   - Ignored `.DS_Store` files under the repo are not part of the bootstrap
 - Canonical files described:
@@ -48,35 +36,42 @@
   - `docs/Artifact Review MVP Plan.md`
   - `docs/artifact-review-provider-registry-integration-review.md`
   - `docs/architecture/bootstrap-architecture.md`
+  - `docs/api-contract.md`
+  - `docs/data-model.md`
+  - `docs/setup-readiness.md`
+  - `docs/verification-plan.md`
+  - `docs/implementation-sequence.md`
+  - `docs/design/review-workspace-ui-ux.md`
+  - `docs/workflow/artifact-review-0.1.0-state-workflow-definition.json`
   - `docs/completed-tasks.md`
   - `handoff.md`
 - Last verification:
-  - command: `node` JSON parse of `package.json` and `src-tauri/tauri.conf.json`; `node --check scripts/doctor.mjs`; `python3 "/Users/paulmarshall/Software Development/All Standards/scripts/check-local-port-registry.py"`
-  - result: passed; registry checker reported only pre-existing unrelated conflicts and AGENTS gaps outside this repo
-  - timestamp UTC: 2026-06-12T03:28:41Z
+  - command: `npm install`; `npm audit --json`; `node` JSON parse of `docs/workflow/artifact-review-0.1.0-state-workflow-definition.json`; `npm run verify`; `npm run dev:service`; `curl -sS http://127.0.0.1:4793/health`; `curl -sS http://127.0.0.1:4793/ready`; `curl -sS http://127.0.0.1:4793/api/setup-readiness`
+  - result: passed; npm audit reported zero vulnerabilities; `npm run verify` passed with 2 test files and 3 tests; service health returned `status: ok`; readiness returned expected missing `DATABASE_URL`, provider, and workflow setup blockers
+  - timestamp UTC: 2026-06-12T06:04:23Z
 - Handoff freshness: fresh-to-dirty-tree
-- Safe-to-continue basis: this handoff describes the current uncommitted bootstrap tree, and every listed canonical project file exists
-- Next checkpoint action: install dependencies only if explicitly requested, run `npm run verify`, then commit the bootstrap if the result is acceptable
+- Safe-to-continue basis: dependencies are installed, lockfile exists, the workflow fixture parses as JSON, and the root verification path passes
+- Next checkpoint action: start Build Slice 1 from `docs/implementation-sequence.md`, or commit the current pre-build baseline if requested
 
 ## 2. Executive Summary
 
-Artifact Review is now bootstrapped as a Tauri 2 + React + local TypeScript service project from the documents in `docs/`.
+Artifact Review is now past the pre-build readiness checkpoint. The stack, root commands, ports, workflow fixture, provider boundary, API contract, data model, setup/readiness model, verification plan, and implementation sequence are documented.
 
-Complete now: MVP plan alignment, repo initialization, project scaffold, provider/workflow/readiness boundaries, migrations, initial tests, README, AGENTS.md, architecture note, local port registry update, completed-task ledger, and this handoff.
+Complete now: dependency install, lockfile generation, Vite/Vitest security patch, Vite env typing, passing full verification, workflow fixture alignment with UI notes, and pre-build contract documents.
 
-Incomplete now: dependencies are not installed, no lockfile exists, `npm run verify` has not run, real provider registry client wiring is still a stub, workflow import/activation is not implemented, document ingest/export are not implemented, and there is no first commit.
+Incomplete now: real provider registry client wiring is still a stub, workflow import/activation is not implemented, document ingest/export are not implemented, repositories are not implemented, and no commit has been made for this readiness pass.
 
-The current state is safe to continue from as an uncommitted bootstrap checkpoint, not as a verified build.
+The current state is safe to continue from as a verified pre-build checkpoint.
 
 Completed work history is tracked in `docs/completed-tasks.md`; do not duplicate it here.
 
 ## 3. Current Objective
 
-Immediate goal: turn the scaffold into a verified local development baseline.
+Immediate goal: begin Build Slice 1, the persistence foundation, without reopening stack or contract decisions.
 
-Intended finished state: dependencies installed, lockfile generated, typecheck/tests/build passing, local service and UI launchable on registered ports, and the initial bootstrap committed when approved.
+Intended next finished state: migration runner, database lifecycle helpers, first repositories, and repository tests.
 
-Definition of done for the next workstream: `npm run verify` passes or failures are fixed and documented; any remaining runtime blockers are explicit.
+Definition of done for the next workstream: `npm run verify` passes, database-backed tests pass against the chosen test database setup, and any remaining runtime blockers are explicit.
 
 ## 4. Current State
 
@@ -84,14 +79,20 @@ Definition of done for the next workstream: `npm run verify` passes or failures 
 
 - Git repo exists on branch `main`.
 - Root scripts are defined in `package.json`.
+- Dependencies are installed and `package-lock.json` exists.
 - Tauri/Vite UI port is fixed at `127.0.0.1:5182`.
 - Local TypeScript service port is fixed at `127.0.0.1:4793`.
 - Shared port registry has Artifact Review rows for UI, service, and Postgres.
 - README and AGENTS.md document commands, ports, runtime notes, and constraints.
+- Pre-build docs exist for API contract, data model, setup/readiness, verification, and implementation sequence.
 - Initial React workspace shell renders review/setup/readiness surfaces.
 - Local service exposes planned health/readiness/provider/document API boundaries in code.
 - Postgres migration files define the planned MVP schema.
 - Initial Vitest tests exist for parser stability and provider profile/readiness behavior.
+- `npm audit --json` reports zero vulnerabilities.
+- `npm run verify` passes.
+- `npm run dev:service` starts the service on `127.0.0.1:4793`.
+- `/health` returns service liveness; `/ready` and `/api/setup-readiness` return expected setup blockers when env is not configured.
 
 ### Partially Working
 
@@ -102,8 +103,6 @@ Definition of done for the next workstream: `npm run verify` passes or failures 
 
 ### Not Working Yet
 
-- Dependency install has not been run.
-- No `package-lock.json` exists yet.
 - No Tauri Cargo lockfile exists yet.
 - No Postgres migration runner exists yet.
 - No actual document persistence repositories exist yet.
@@ -112,14 +111,9 @@ Definition of done for the next workstream: `npm run verify` passes or failures 
 
 ### Not Yet Verified
 
-- `npm install`
-- `npm run lint`
-- `npm test`
-- `npm run build`
-- `npm run verify`
 - `npm run dev`
 - `npm run tauri:dev`
-- Browser or desktop visual verification
+- Browser UI or desktop visual verification
 
 ## 5. Active Constraints
 
@@ -139,7 +133,6 @@ Definition of done for the next workstream: `npm run verify` passes or failures 
 
 Likely next commands:
 
-- `npm install`
 - `npm run verify`
 - `npm run dev`
 - `npm run tauri:dev`
@@ -154,19 +147,18 @@ Prerequisites:
 
 Most recent verified command results:
 
-- `node` JSON parse of `package.json` and `src-tauri/tauri.conf.json`: passed
-- `npm pkg get name version scripts.verify`: passed
-- `node --check scripts/doctor.mjs`: passed
-- `python3 "/Users/paulmarshall/Software Development/All Standards/scripts/check-local-port-registry.py"`: passed with pre-existing unrelated warnings only
+- `npm install`: passed
+- `npm audit --json`: passed with zero vulnerabilities
+- `node` JSON parse of `docs/workflow/artifact-review-0.1.0-state-workflow-definition.json`: passed
+- `npm run verify`: passed with 2 test files and 3 tests
+- `npm run dev:service`: passed after local execution approval; sandboxed start failed first with `listen EPERM` on tsx IPC
+- `GET /health`: passed with `status: ok`
+- `GET /ready`: passed with expected `DATABASE_URL is not configured.`
+- `GET /api/setup-readiness`: passed with expected database, provider, demo-mode, and workflow setup blockers
 
 Unverified areas:
 
-- Dependency resolution and generated lockfiles
-- TypeScript compile
-- Vitest execution
-- Vite build
 - Tauri build/dev startup
-- Runtime service startup
 - UI rendering in browser or Tauri shell
 
 Handoff helper status:
@@ -182,6 +174,11 @@ Handoff helper status:
 - `docs/Artifact Review MVP Plan.md`: canonical MVP implementation plan.
 - `docs/artifact-review-provider-registry-integration-review.md`: provider registry boundary review that the plan must comply with.
 - `docs/architecture/bootstrap-architecture.md`: current architecture and first implementation slices.
+- `docs/api-contract.md`: current and reserved service API boundary.
+- `docs/data-model.md`: app-owned Postgres model and provider/workflow ownership rules.
+- `docs/setup-readiness.md`: environment variables, readiness endpoints, blockers, and diagnostics.
+- `docs/verification-plan.md`: verification commands and first test coverage targets.
+- `docs/implementation-sequence.md`: ordered build slices.
 - `package.json`: root scripts and numbered dependency versions.
 - `service/src/http/server.ts`: current API/readiness scaffold.
 - `service/src/providers/readiness.ts`: provider profile/readiness policy.
@@ -193,15 +190,12 @@ Handoff helper status:
 
 Next:
 
-- Install dependencies when explicitly approved or requested.
-- Run `npm run verify`.
-- Fix any verification failures from the scaffold.
-- Launch the service/UI and inspect readiness behavior.
-- Commit the initial bootstrap only if requested.
+- Start Build Slice 1 from `docs/implementation-sequence.md`: migration runner, database lifecycle helpers, repositories, and repository tests.
+- Launch the service/UI and inspect readiness behavior when runtime validation is requested.
+- Commit the pre-build baseline only if requested.
 
 Blocked:
 
-- Full verification is blocked until dependencies are installed.
 - Database-backed behavior is blocked until `DATABASE_URL` points to an available Postgres database and migrations can run.
 - Provider-backed behavior is blocked until real registry client integration and selected profile handling are implemented.
 

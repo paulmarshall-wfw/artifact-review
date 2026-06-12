@@ -159,7 +159,6 @@
         "label": "Needs Review",
         "visible": true,
         "states": [
-          "ingestion",
           "needs_review"
         ]
       },

@@ -18,3 +18,8 @@ Append brief entries here when project work is completed. Keep this file concise
   Outcome: Validated the repo-stored `artifact-review_workflow` definition as an explicit import/activation artifact and documented the editor-first review workspace layout in `docs/design/review-workspace-ui-ux.md`.
   Verification: `state-workflow-runtime` validator returned `valid: true`; read back `docs/design/review-workspace-ui-ux.md` after creation.
   Traceability: Git branch `main` at `95c911c`; changed `docs/design/review-workspace-ui-ux.md`; reviewed `docs/workflow/artifact-review-0.1.0-state-workflow-definition.json`.
+
+- Task: Complete pre-build readiness baseline.
+  Outcome: Installed dependencies, generated `package-lock.json`, added Vite env typing, patched Vite and Vitest to non-vulnerable numbered versions, corrected the workflow fixture so internal `ingestion` documents stay out of the visible `Needs Review` bucket, and added API, data model, setup/readiness, verification, and implementation-sequence documents.
+  Verification: `npm audit --json` reported zero vulnerabilities; `node` JSON parse of `docs/workflow/artifact-review-0.1.0-state-workflow-definition.json` passed; `npm run verify` passed with 2 test files and 3 tests; `npm run dev:service` started the service and `/health`, `/ready`, and `/api/setup-readiness` returned expected responses.
+  Traceability: Git branch `main` at `3d47cd2`; no commit yet; changed `README.md`, `docs/workflow/artifact-review-0.1.0-state-workflow-definition.json`, `package.json`, and added pre-build docs, `package-lock.json`, and `src/vite-env.d.ts`.
