@@ -33,3 +33,8 @@ Append brief entries here when project work is completed. Keep this file concise
   Outcome: Updated `handoff.md` to describe committed baseline `5cc1f22` and recorded this completed-task ledger refresh without duplicating completed work history in the handoff.
   Verification: Git status was clean at `5cc1f22` before the continuity refresh; no build or test commands were rerun because only continuity documents changed.
   Traceability: Git branch `main` at `5cc1f22`; changed `handoff.md` and `docs/completed-tasks.md`.
+
+- Task: Refresh persistence-slice ledger traceability.
+  Outcome: Confirmed the Build Slice 1 persistence foundation entry is present and appended current committed traceability without rewriting older ledger entries.
+  Verification: Read `docs/completed-tasks.md`; `git status --short` was clean before this ledger-only update; no build or test commands rerun.
+  Traceability: Git branch `main` at `f8010ac`; changed `docs/completed-tasks.md`.
