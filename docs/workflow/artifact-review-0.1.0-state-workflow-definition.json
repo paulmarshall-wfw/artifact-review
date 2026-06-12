@@ -1,0 +1,209 @@
+{
+  "schemaVersion": "2.0.0",
+  "appName": "artifact-review",
+  "id": "artifact-review_state",
+  "definitionVersion": "0.1.0",
+  "stateMachineDefinition": {
+    "id": "artifact-review_state",
+    "states": [
+      "ingestion",
+      "needs_review",
+      "recent_reviews",
+      "library",
+      "rejected"
+    ],
+    "entryStates": [
+      "ingestion"
+    ],
+    "terminalStates": [],
+    "transitions": [
+      {
+        "from": "recent_reviews",
+        "to": "needs_review"
+      },
+      {
+        "from": "ingestion",
+        "to": "needs_review"
+      },
+      {
+        "from": "needs_review",
+        "to": "recent_reviews"
+      },
+      {
+        "from": "needs_review",
+        "to": "rejected"
+      },
+      {
+        "from": "library",
+        "to": "needs_review"
+      },
+      {
+        "from": "library",
+        "to": "rejected"
+      },
+      {
+        "from": "rejected",
+        "to": "needs_review"
+      },
+      {
+        "from": "recent_reviews",
+        "to": "library"
+      },
+      {
+        "from": "rejected",
+        "to": "library"
+      }
+    ]
+  },
+  "workflowDefinition": {
+    "id": "artifact-review_workflow",
+    "states": [
+      {
+        "id": "ingestion",
+        "visible": false
+      },
+      {
+        "id": "needs_review",
+        "visible": true
+      },
+      {
+        "id": "recent_reviews",
+        "visible": true
+      },
+      {
+        "id": "library",
+        "visible": true
+      },
+      {
+        "id": "rejected",
+        "visible": true
+      }
+    ],
+    "actions": [
+      {
+        "id": "recent_reviews.to_needs_review",
+        "label": "Review",
+        "from": "recent_reviews",
+        "to": "needs_review",
+        "trigger": "user",
+        "visible": true
+      },
+      {
+        "id": "ingestion.to_needs_review",
+        "label": "Needs Review",
+        "from": "ingestion",
+        "to": "needs_review",
+        "trigger": "automatic",
+        "visible": false
+      },
+      {
+        "id": "needs_review.to_recent_reviews",
+        "label": "Reviewed",
+        "from": "needs_review",
+        "to": "recent_reviews",
+        "trigger": "user",
+        "visible": true
+      },
+      {
+        "id": "needs_review.to_rejected",
+        "label": "Reject",
+        "from": "needs_review",
+        "to": "rejected",
+        "trigger": "user",
+        "visible": true
+      },
+      {
+        "id": "library.to_needs_review",
+        "label": "Review",
+        "from": "library",
+        "to": "needs_review",
+        "trigger": "user",
+        "visible": true
+      },
+      {
+        "id": "library.to_rejected",
+        "label": "Reject",
+        "from": "library",
+        "to": "rejected",
+        "trigger": "user",
+        "visible": true
+      },
+      {
+        "id": "rejected.to_needs_review",
+        "label": "Review",
+        "from": "rejected",
+        "to": "needs_review",
+        "trigger": "user",
+        "visible": true
+      },
+      {
+        "id": "recent_reviews.to_library",
+        "label": "Save in Library",
+        "from": "recent_reviews",
+        "to": "library",
+        "trigger": "user",
+        "visible": true
+      },
+      {
+        "id": "rejected.to_library",
+        "label": "Move to Library",
+        "from": "rejected",
+        "to": "library",
+        "trigger": "user",
+        "visible": true
+      }
+    ],
+    "buckets": [
+      {
+        "id": "needs_review",
+        "label": "Needs Review",
+        "visible": true,
+        "states": [
+          "ingestion",
+          "needs_review"
+        ]
+      },
+      {
+        "id": "recent_reviews",
+        "label": "Recent Reviews",
+        "visible": true,
+        "states": [
+          "recent_reviews"
+        ]
+      },
+      {
+        "id": "library",
+        "label": "Library",
+        "visible": true,
+        "states": [
+          "library"
+        ]
+      },
+      {
+        "id": "rejected",
+        "label": "Rejected",
+        "visible": true,
+        "states": [
+          "rejected"
+        ]
+      }
+    ],
+    "hooks": [
+      {
+        "id": "while_in_state_ingestion",
+        "phase": "while_in_state",
+        "targetType": "state",
+        "targetId": "ingestion",
+        "handlerKey": "ingest",
+        "schedule": {
+          "trigger": "after_duration",
+          "delayMs": 10000
+        },
+        "retryPolicy": {
+          "maxAttempts": 2,
+          "delayMs": 1000
+        }
+      }
+    ]
+  }
+}
