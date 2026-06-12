@@ -20,16 +20,21 @@ As of 2026-06-12:
 | `npm install` | Install numbered dependencies and refresh the lockfile. |
 | `npm run lint` | Typecheck React/Vite and service TypeScript. |
 | `npm test` | Run Vitest test suite. |
+| `npm run test:postgres` | Run opt-in Postgres integration tests when `ARTIFACT_REVIEW_TEST_DATABASE_URL` is configured. |
 | `npm run build` | Typecheck and build the Vite UI. |
 | `npm run verify` | Run lint, tests, and build as the main local verification path. |
 | `npm run doctor` | Inspect service health/readiness when the local service is running. |
+
+## Postgres Integration Harness
+
+`npm run test:postgres` validates the migration runner and repositories against a configured Postgres database. Set `ARTIFACT_REVIEW_TEST_DATABASE_URL` to a disposable local database URL before running it.
+
+The test creates a temporary schema named `artifact_review_test_<uuid>`, runs migrations in that schema, verifies idempotency, round-trips repository records, and drops only the temporary schema during cleanup. Do not point this variable at a production database.
 
 ## Test Coverage To Add First
 
 Implement these before or with the related feature slices:
 
-- migration runner applies migrations in order and is idempotent against isolated Postgres
-- database-backed repository tests for documents, document versions, components, task runs, suggestions, and app settings
 - parser tests for `txt`, `md`, `html`, `htm`, and URL snapshot inputs
 - component ID stability across autosave and save
 - no active workflow blocks ingest with setup guidance

@@ -117,6 +117,32 @@ describe("repositories", () => {
     ]);
   });
 
+  it("updates document workflow state through the documents repository", async () => {
+    const now = new Date("2026-06-12T00:00:00.000Z");
+    const db = createQueuedDatabase([
+      [
+        {
+          id: "document-1",
+          project_id: null,
+          name: "Review.md",
+          source_type: "file",
+          original_format: "md",
+          current_workflow_item_ref: "recent_reviews",
+          ingested_at: now,
+          updated_at: now
+        }
+      ]
+    ]);
+    const repository = new DocumentsRepository(db);
+
+    await expect(repository.updateDocumentWorkflowState("document-1", "recent_reviews")).resolves.toMatchObject({
+      id: "document-1",
+      currentWorkflowItemRef: "recent_reviews"
+    });
+    expect(db.queries[0]?.text).toContain("set current_workflow_item_ref = $2");
+    expect(db.queries[0]?.values).toEqual(["document-1", "recent_reviews"]);
+  });
+
   it("maps task run provenance and AI suggestion confidence values", async () => {
     const now = new Date("2026-06-12T00:00:00.000Z");
     const db = createQueuedDatabase([

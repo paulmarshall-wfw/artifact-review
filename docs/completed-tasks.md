@@ -4,6 +4,16 @@ Append brief entries here when project work is completed. Keep this file concise
 
 ## 2026-06-12
 
+- Task: Refresh completed-task ledger and handoff after workflow operations.
+  Outcome: Confirmed the build-work ledger entry was already present, appended this concise continuity refresh entry, and refreshed `handoff.md` as the current dirty-tree checkpoint without duplicating completed-task history.
+  Verification: `git status --short --branch` and current `handoff.md`/`docs/completed-tasks.md` inspection completed; no build or test commands rerun because this was documentation-only continuity work.
+  Traceability: Git branch `main` at `ed04eaf`; changed `docs/completed-tasks.md` and `handoff.md`.
+
+- Task: Continue build with Postgres validation and workflow operations.
+  Outcome: Added an opt-in isolated Postgres integration harness, validated migration idempotency and repository round trips against local Postgres, added workflow definition validation, active workflow storage, workflow status, allowed document actions, and guarded workflow transition endpoints.
+  Verification: `ARTIFACT_REVIEW_TEST_DATABASE_URL=<isolated local Postgres URL> npm run test:postgres` passed with 2 tests; `npm run verify` passed with 4 test files, 1 skipped Postgres suite, 10 tests passed, and 2 skipped; service smoke against isolated Postgres confirmed `/ready`, workflow validation, workflow activation, setup readiness, and active workflow status.
+  Traceability: Git branch `main` at `ed04eaf`; no commit yet; changed service workflow/persistence code, tests, package scripts, and docs.
+
 - Task: Start Build Slice 1 persistence foundation.
   Outcome: Added service startup migration lifecycle, transactional migration runner with checksum tracking, app repositories for documents, document versions, review components, app settings, task runs, and AI suggestions, and repository-backed document/task-run reads where the current API contract already reserves them.
   Verification: `npm run verify` passed with 3 test files and 7 tests; sandboxed `npm run dev:service` hit the known `tsx` IPC `listen EPERM`, then approved local startup succeeded; `/health`, `/ready`, `/api/documents`, and `/api/setup-readiness` returned expected responses without `DATABASE_URL`.

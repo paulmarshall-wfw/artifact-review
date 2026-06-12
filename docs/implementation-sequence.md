@@ -27,10 +27,10 @@ Completed:
 - Add database lifecycle helpers for startup and shutdown.
 - Add repositories for documents, document versions, review components, app settings, task runs, and AI suggestions.
 - Add deterministic migration-loader and repository tests that run in the default verification path.
+- Add opt-in Postgres integration tests for migration idempotency and repository round trips.
 
 Remaining:
 
-- Run and validate migrations/repositories against an isolated configured Postgres database.
 - Wire repositories into ingest and review mutation flows in later slices.
 - Keep raw provider secrets out of Postgres.
 
@@ -38,10 +38,16 @@ Remaining:
 
 Purpose: make document lifecycle state backend-owned before ingest.
 
-- Implement workflow definition import validation.
-- Implement explicit activation for a user-provided document workflow.
+Completed:
+
+- Implement workflow definition validation.
+- Implement explicit activation storage for a user-provided document workflow.
 - Add service endpoints for active workflow status and allowed document actions.
-- Wire `state-workflow-runtime` through an app-owned storage adapter.
+- Add service-side transition rejection for actions not allowed from the document's current state.
+
+Remaining:
+
+- Wire `state-workflow-runtime` through an app-owned storage adapter after the dependency is added.
 - Keep the repo-stored workflow fixture importable but not auto-activated.
 
 ## Build Slice 3: Ingest And Component Model

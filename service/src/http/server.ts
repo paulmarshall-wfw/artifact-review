@@ -6,6 +6,13 @@ import { checkDatabase } from "../db/pool.js";
 import { combineReadiness } from "../domain/readiness.js";
 import { buildProviderReadiness } from "../providers/readiness.js";
 import { createRepositories } from "../repositories/index.js";
+import {
+  findWorkflowAction,
+  getAllowedWorkflowActions,
+  getEntryState,
+  summarizeWorkflowDefinition,
+  validateDocumentWorkflowDefinition
+} from "../workflow/definition.js";
 import { buildWorkflowReadiness } from "../workflow/readiness.js";
 
 export function createServer(config: AppConfig, pool: pg.Pool | null) {
@@ -30,10 +37,11 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
 
   app.get("/api/setup-readiness", async (_request, response) => {
     const database = await checkDatabase(pool);
+    const activeWorkflow = await repositories?.workflows.getActiveDocumentWorkflow();
     const provider = buildProviderReadiness(config, {
       selectedProviderProfileKey: await repositories?.appSettings.getSelectedProviderProfileKey()
     });
-    const workflow = buildWorkflowReadiness(false);
+    const workflow = buildWorkflowReadiness(Boolean(activeWorkflow));
 
     response.json(
       combineReadiness([
@@ -42,6 +50,52 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
         ...workflow.checks
       ])
     );
+  });
+
+  app.get("/api/workflow/status", async (_request, response) => {
+    const activeWorkflow = await repositories?.workflows.getActiveDocumentWorkflow();
+
+    response.json({
+      active: Boolean(activeWorkflow),
+      workflow: activeWorkflow ? summarizeWorkflowDefinition(activeWorkflow) : null,
+      readiness: buildWorkflowReadiness(Boolean(activeWorkflow))
+    });
+  });
+
+  app.post("/api/workflow/definitions/validate", (request, response) => {
+    const validation = validateDocumentWorkflowDefinition(request.body);
+
+    response.status(validation.valid ? 200 : 422).json(
+      validation.valid
+        ? {
+            valid: true,
+            workflow: summarizeWorkflowDefinition(validation.definition)
+          }
+        : validation
+    );
+  });
+
+  app.post("/api/workflow/activate", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before activating a document workflow."
+      });
+      return;
+    }
+
+    const validation = validateDocumentWorkflowDefinition(request.body);
+    if (!validation.valid) {
+      response.status(422).json(validation);
+      return;
+    }
+
+    await repositories.workflows.setActiveDocumentWorkflow(validation.definition);
+    response.json({
+      active: true,
+      workflow: summarizeWorkflowDefinition(validation.definition),
+      initialState: getEntryState(validation.definition)
+    });
   });
 
   app.get("/api/provider-readiness", async (_request, response) => {
@@ -93,6 +147,98 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       document,
       versions: await repositories.documents.getDocumentVersions(document.id),
       components: await repositories.documents.getReviewComponents(document.id)
+    });
+  });
+
+  app.get("/api/workflow/documents/:documentId/actions", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before reading document workflow actions."
+      });
+      return;
+    }
+
+    const [document, activeWorkflow] = await Promise.all([
+      repositories.documents.getDocument(request.params.documentId),
+      repositories.workflows.getActiveDocumentWorkflow()
+    ]);
+
+    if (!document) {
+      response.status(404).json({
+        error: "document_not_found",
+        documentId: request.params.documentId
+      });
+      return;
+    }
+
+    if (!activeWorkflow) {
+      response.status(409).json({
+        error: "workflow_not_configured",
+        message: "Import or activate a user-provided document workflow before reading document actions."
+      });
+      return;
+    }
+
+    const currentState = document.currentWorkflowItemRef ?? getEntryState(activeWorkflow);
+    response.json({
+      documentId: document.id,
+      currentState,
+      actions: getAllowedWorkflowActions(activeWorkflow, currentState)
+    });
+  });
+
+  app.post("/api/workflow/documents/:documentId/actions/:actionId", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before executing document workflow actions."
+      });
+      return;
+    }
+
+    const [document, activeWorkflow] = await Promise.all([
+      repositories.documents.getDocument(request.params.documentId),
+      repositories.workflows.getActiveDocumentWorkflow()
+    ]);
+
+    if (!document) {
+      response.status(404).json({
+        error: "document_not_found",
+        documentId: request.params.documentId
+      });
+      return;
+    }
+
+    if (!activeWorkflow) {
+      response.status(409).json({
+        error: "workflow_not_configured",
+        message: "Import or activate a user-provided document workflow before executing document actions."
+      });
+      return;
+    }
+
+    const currentState = document.currentWorkflowItemRef ?? getEntryState(activeWorkflow);
+    const action = findWorkflowAction(activeWorkflow, currentState, request.params.actionId);
+    if (!action) {
+      response.status(409).json({
+        error: "workflow_action_not_allowed",
+        documentId: document.id,
+        currentState,
+        actionId: request.params.actionId
+      });
+      return;
+    }
+
+    const updatedDocument = await repositories.documents.updateDocumentWorkflowState(document.id, action.to);
+    response.json({
+      document: updatedDocument,
+      transition: {
+        actionId: action.id,
+        from: action.from,
+        to: action.to
+      },
+      actions: getAllowedWorkflowActions(activeWorkflow, action.to)
     });
   });
 

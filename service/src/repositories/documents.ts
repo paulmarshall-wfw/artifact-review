@@ -210,6 +210,19 @@ export class DocumentsRepository {
 
     return components;
   }
+
+  async updateDocumentWorkflowState(documentId: string, workflowState: string): Promise<DocumentSummary | null> {
+    const result = await this.db.query<DocumentRow>(
+      `
+        update documents
+        set current_workflow_item_ref = $2, updated_at = now()
+        where id = $1
+        returning id, project_id, name, source_type, original_format, current_workflow_item_ref, ingested_at, updated_at
+      `,
+      [documentId, workflowState]
+    );
+    return result.rows[0] ? mapDocument(result.rows[0]) : null;
+  }
 }
 
 function mapDocument(row: DocumentRow): DocumentSummary {

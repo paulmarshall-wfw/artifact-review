@@ -31,6 +31,12 @@ Required for database-backed work:
 DATABASE_URL=postgres://artifact_review:artifact_review@localhost:5432/artifact_review_dev
 ```
 
+Optional isolated Postgres integration tests use a disposable schema inside the configured database and drop only that schema after the run:
+
+```text
+ARTIFACT_REVIEW_TEST_DATABASE_URL=postgres://artifact_review:artifact_review@localhost:5432/artifact_review_test
+```
+
 Provider-backed actions also require:
 
 ```text
@@ -47,6 +53,7 @@ npm install
 npm run dev
 npm run tauri:dev
 npm test
+npm run test:postgres
 npm run lint
 npm run build
 npm run verify
@@ -79,9 +86,13 @@ After dependencies are installed, run:
 npm run verify
 ```
 
-The initial test suite covers parser stability and provider readiness policy. The service also exposes:
+The default test suite covers parser stability, provider readiness policy, migration loading, and repository mapping. Use `npm run test:postgres` with `ARTIFACT_REVIEW_TEST_DATABASE_URL` when validating migrations and repositories against a real Postgres database. The service also exposes:
 
 - `GET /health`
 - `GET /ready`
 - `GET /api/setup-readiness`
 - `GET /api/provider-readiness`
+- `GET /api/workflow/status`
+- `POST /api/workflow/definitions/validate`
+- `POST /api/workflow/activate`
+- `GET /api/workflow/documents/:documentId/actions`

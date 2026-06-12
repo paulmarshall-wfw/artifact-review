@@ -11,8 +11,13 @@ Artifact Review uses a local TypeScript service as the only HTTP API boundary fo
 | `GET` | `/api/setup-readiness` | Combines database, provider, and workflow readiness checks. |
 | `GET` | `/api/provider-readiness` | Reports registry/profile/task/schema/fallback/demo readiness. |
 | `GET` | `/api/provider-readiness/tasks/:taskKey` | Reports provider readiness in the context of a task key. |
+| `GET` | `/api/workflow/status` | Returns active document workflow status, active workflow summary, and workflow readiness. |
+| `POST` | `/api/workflow/definitions/validate` | Validates a user-provided document workflow definition without activating it. |
+| `POST` | `/api/workflow/activate` | Validates and stores a user-provided active document workflow when `DATABASE_URL` is configured. |
 | `GET` | `/api/documents` | Returns repository-backed document summaries when `DATABASE_URL` is configured; otherwise returns an empty list. |
 | `GET` | `/api/documents/:documentId` | Returns repository-backed document, versions, and review components when present; otherwise returns `404 document_not_found`. |
+| `GET` | `/api/workflow/documents/:documentId/actions` | Returns backend-derived visible user actions for the document's current workflow state. |
+| `POST` | `/api/workflow/documents/:documentId/actions/:actionId` | Executes an allowed visible user workflow action and updates the document state. |
 | `POST` | `/api/ingest/file` | Returns `409 workflow_not_configured` until workflow import/activation exists. |
 | `POST` | `/api/ingest/url` | Returns `409 workflow_not_configured` until workflow import/activation exists. |
 | `POST` | `/api/components/:componentId/ai-suggestions` | Blocks when provider readiness fails; otherwise returns `501 provider_runtime_not_wired`. |
@@ -34,8 +39,7 @@ These routes are reserved by the MVP plan and should be implemented incrementall
 | `POST` | `/api/components/:componentId/evidence` | Add source, link, path, screenshot path, or note evidence. |
 | `POST` | `/api/documents/:documentId/save` | Promote current staged review state to a durable document version. |
 | `POST` | `/api/documents/:documentId/export` | Write reviewed output and optional JSON review bundle. |
-| `GET` | `/api/workflow/documents/:documentId/actions` | Return backend-owned allowed workflow actions. |
-| `POST` | `/api/workflow/documents/:documentId/actions/:actionId` | Execute a named backend workflow transition. |
+| `PATCH` | `/api/workflow/active` | Replace or deactivate the active document workflow after import/activation UX exists. |
 
 ## Response Rules
 
@@ -45,6 +49,8 @@ These routes are reserved by the MVP plan and should be implemented incrementall
 - Missing records should use `404` with the missing resource ID when safe.
 - Provider output must never directly mutate document text. Provider invocation creates proposed suggestions only.
 - Workflow state must be returned by the service and must not be inferred as durable truth in React.
+- Workflow validation failures return `422` with `valid: false` and stable error strings.
+- Workflow action execution rejects invalid transitions with `409 workflow_action_not_allowed`.
 
 ## Tauri Command Boundary
 

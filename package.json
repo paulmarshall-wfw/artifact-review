@@ -12,6 +12,7 @@
     "build:service": "tsc -p service/tsconfig.json",
     "build:tauri": "tauri build",
     "test": "vitest run",
+    "test:postgres": "vitest run tests/postgres.integration.test.ts",
     "lint": "tsc -p tsconfig.json --noEmit && tsc -p service/tsconfig.json --noEmit",
     "verify": "npm run lint && npm run test && npm run build",
     "doctor": "node scripts/doctor.mjs"

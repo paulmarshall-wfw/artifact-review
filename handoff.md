@@ -4,115 +4,128 @@
 
 - Project name: Artifact Review
 - Handoff type: implementation handoff
-- Updated timestamp UTC: 2026-06-12T06:40:00Z
+- Updated timestamp UTC: 2026-06-12T07:09:38Z
 - Prepared by: Codex
 - Repository, workspace, or folder: `/Users/paulmarshall/Software Development/artifact-review`
-- Branch or working context: Git branch `main`; current HEAD `de22bd7`
-- Session scope: Build Slice 1 persistence foundation started
+- Branch or working context: Git branch `main`; current HEAD `ed04eaf`; branch is 4 commits ahead of `origin/main`
+- Session scope: Build Slice 1 validation completed; Build Slice 2 workflow operations started; continuity docs refreshed
 
 ### Checkpoint Status
 
-- Git HEAD: `de22bd7`
+- Git HEAD: `ed04eaf`
 - Working tree: dirty
 - Dirty files intentionally in scope:
+  - `README.md`
   - `docs/api-contract.md`
   - `docs/completed-tasks.md`
   - `docs/data-model.md`
   - `docs/implementation-sequence.md`
   - `docs/verification-plan.md`
   - `handoff.md`
+  - `package.json`
   - `service/src/http/server.ts`
-  - `service/src/index.ts`
-- Untracked files intentionally in scope:
-  - `service/src/db/lifecycle.ts`
-  - `service/src/db/migrations.ts`
-  - `service/src/repositories/`
+  - `service/src/repositories/documents.ts`
+  - `service/src/repositories/index.ts`
   - `tests/repositories.test.ts`
-- Dirty or untracked files intentionally out of scope:
+- Dirty files intentionally out of scope:
   - None
+- Untracked files intentionally in scope:
+  - `service/src/repositories/workflows.ts`
+  - `service/src/workflow/definition.ts`
+  - `tests/postgres.integration.test.ts`
+  - `tests/workflow.test.ts`
+- Untracked files intentionally out of scope:
+  - None
+- Canonical files described:
+  - `handoff.md`
+  - `docs/completed-tasks.md`
+  - `docs/implementation-sequence.md`
+  - `docs/api-contract.md`
+  - `docs/data-model.md`
+  - `docs/verification-plan.md`
 - Last verification:
   - command: `npm run verify`
-  - result: passed with 3 test files and 7 tests
-  - timestamp UTC: 2026-06-12T06:38:04Z
+  - result: passed with 4 test files, 1 skipped Postgres suite, 10 tests passed, and 2 skipped
+  - timestamp UTC: 2026-06-12T06:57:07Z
+- Last Postgres integration verification:
+  - command: `ARTIFACT_REVIEW_TEST_DATABASE_URL=<isolated local Postgres URL> npm run test:postgres`
+  - result: passed with 2 tests
+  - timestamp UTC: 2026-06-12T06:55:02Z
 - Last service smoke:
-  - sandboxed `npm run dev:service` failed with the known `tsx` IPC `listen EPERM`
-  - approved local `npm run dev:service` started on `127.0.0.1:4793`
-  - `GET /health` returned `status: ok`
-  - `GET /ready` returned expected `DATABASE_URL is not configured.`
-  - `GET /api/documents` returned `{"documents":[]}`
-  - `GET /api/setup-readiness` returned expected database, provider, demo-mode, and workflow blockers
+  - command: `DATABASE_URL=<isolated local Postgres URL> npm run dev:service`
+  - result: passed for `/ready`, workflow validation, workflow activation, setup readiness, and active workflow status; service stopped with SIGINT
 - Handoff freshness: fresh-to-dirty-tree
+- Safe-to-continue basis: current `HEAD` and all dirty/untracked files are accounted for; last code verification and service smoke are recorded; this handoff points to the completed-task ledger instead of duplicating task history.
+- Next checkpoint action: add HTTP-level workflow endpoint tests, then verify before commit or further handoff refresh.
 
 ## 2. Executive Summary
 
-Artifact Review has moved from the pre-build baseline into Build Slice 1.
+Current focus is Artifact Review persistence and backend-owned workflow operations.
 
-Completed in this slice:
+Confirmed complete now:
 
-- Added service database lifecycle helpers.
-- Added a transactional migration runner that loads numbered SQL files, tracks checksums in `schema_migrations`, skips already-applied migrations, and fails on checksum drift.
-- Runs migrations during service startup when `DATABASE_URL` is configured; startup still works without `DATABASE_URL` and reports readiness blockers.
-- Added repositories for documents, document versions, review components, app settings, task runs, and AI suggestions.
-- Wired repository-backed reads into existing document and task-run API endpoints when a database is configured.
-- Provider readiness now considers a saved `selectedProviderProfileKey` from `app_settings` before the first-run environment fallback when repositories are available.
-- Added deterministic tests for migration file loading and repository mapping/query behavior.
-- Updated implementation and verification docs plus the completed-task ledger.
+- Build Slice 1 persistence foundation and isolated Postgres validation.
+- Initial Build Slice 2 service-owned workflow validation, activation storage, status, allowed-actions, and guarded transition endpoints.
+- Continuity docs refreshed for the current dirty tree.
 
-Still incomplete:
+Incomplete now:
 
-- No configured Postgres migration run was performed in this session.
-- No ingest, workflow activation, review mutation, AI invocation, suggestion accept/reject mutation, autosave, or export implementation exists yet.
-- No Tauri desktop validation was run.
+- `state-workflow-runtime` is not installed or wired.
+- HTTP-level workflow endpoint tests are not added.
+- Ingest, review mutations, autosave, provider invocation, suggestion accept/reject, export, browser UI validation, and Tauri validation are still pending.
+
+Safe to continue from this dirty tree. Completed work history is tracked in `docs/completed-tasks.md`; do not duplicate it here.
 
 ## 3. Current Objective
 
-Continue Build Slice 1 only if a configured isolated Postgres database is available, then move to Build Slice 2.
+Continue Build Slice 2 until workflow operations have durable endpoint coverage, then start Build Slice 3 ingest.
 
-Definition of done for the remaining persistence foundation:
+Definition of done for the next workstream:
 
-- migrations apply cleanly and idempotently against an isolated Postgres database
-- repository operations are verified against that database
-- any required test database setup is documented
-- `npm run verify` still passes
+- Add HTTP-level tests for workflow validation, activation, allowed actions, and invalid transition rejection.
+- Decide whether to install/wire `state-workflow-runtime` now; do not install dependencies unless explicitly approved.
+- Keep the repo workflow fixture importable but never auto-activated.
+- Preserve backend-owned workflow state and render allowed actions from service responses.
 
 ## 4. Current State
 
 ### Working
 
-- Root scripts are still defined in `package.json`.
 - `npm run verify` passes.
-- Service startup skips migrations cleanly when `DATABASE_URL` is absent.
-- Service startup runs the migration lifecycle before binding when `DATABASE_URL` is present.
-- Migration files are loaded deterministically and checksumed.
-- Repository classes compile and are covered by deterministic tests.
-- `/api/documents` remains safe without a database and returns an empty list.
-- `/api/documents/:documentId` and `/api/task-runs/:taskRunId` can read from repositories when a database exists.
-- Provider readiness can use persisted selected profile settings when app settings are available.
+- `npm run test:postgres` passes when `ARTIFACT_REVIEW_TEST_DATABASE_URL` points at a reachable isolated Postgres database.
+- Default tests skip the Postgres integration suite when the URL is absent.
+- Service startup runs migrations when `DATABASE_URL` is configured.
+- Migrations are idempotent against real Postgres.
+- Repositories round-trip document, version, component, app setting, task run, suggestion, and active workflow records against real Postgres.
+- `/api/workflow/status`, `/api/workflow/definitions/validate`, `/api/workflow/activate`, `/api/workflow/documents/:documentId/actions`, and `/api/workflow/documents/:documentId/actions/:actionId` are implemented.
+- `/api/setup-readiness` uses persisted active workflow state.
 
 ### Partially Working
 
-- The migration runner is implemented but not yet validated against a real configured Postgres database in this session.
-- Repositories are implemented and unit-tested for mapping/query behavior, but not integration-tested against Postgres.
-- API endpoints use repositories for reads only; mutation flows are still reserved for later slices.
+- Workflow operations are backend-owned but not yet backed by `state-workflow-runtime`.
+- Workflow activation is API-only; no UI surface exists yet.
+- Document workflow action endpoints require existing documents; ingest is still blocked.
 
 ### Not Working Yet
 
-- No workflow import/activation.
-- No document ingest.
-- No component edit, annotation, question, evidence, or highlight mutations.
-- No provider-backed task invocation.
-- No suggestion accept/reject mutations.
-- No export.
+- `state-workflow-runtime` adapter.
+- Document ingest and component model creation.
+- Review mutations, autosave, provider-backed suggestions, suggestion accept/reject, and export.
+
+### Not Yet Verified
+
+- `npm run dev`
+- `npm run tauri:dev`
+- Chrome/browser UI validation
+- Tauri desktop validation
 
 ## 5. Active Constraints
 
-- Apply `engineering-project-standard` for repo setup, maintenance, versioning, and stack-selection work.
-- Apply `web-app-design-standard` for frontend UI design, scaffolding, review, or refinement work.
-- Use Chrome for browser automation unless explicitly asked otherwise.
-- Build Mode by default; do not release, publish, tag, or package unless explicitly requested.
+- Build Mode by default; do not release, publish, tag, package, install dependencies, or commit unless explicitly requested.
 - Never use `latest`; use numbered versions.
-- Artifact Review is an `invoke-providers-for-tasks` target app, not a provider registry owner.
-- Shared registry owns provider catalog/profile/config records; Artifact Review owns selected profile settings, tasks, prompts, schemas, hooks, task runs, suggestions, documents, workflow transitions, and domain mutations.
+- Use Chrome for browser automation unless explicitly asked otherwise.
+- Artifact Review is an `invoke-providers-for-tasks` target app; the shared registry owns provider catalog/profile/config records.
+- Artifact Review owns selected profile settings, tasks, prompts, schemas, hooks, task runs, suggestions, documents, workflow transitions, and domain mutations.
 - Provider output must create proposed suggestions only; accepting a suggestion is a separate audited user action.
 - Backend-owned workflow state is authoritative; React renders allowed actions from the service.
 - Do not store raw provider secrets in Postgres.
@@ -120,56 +133,54 @@ Definition of done for the remaining persistence foundation:
 
 ## 6. Commands and Verification
 
-Verified this session:
+Most recent verified commands:
 
-- `npm run verify`: passed with 3 test files and 7 tests.
-- `npm run dev:service`: sandboxed attempt failed with `listen EPERM` on the `tsx` local IPC pipe; approved local start succeeded.
-- `curl -sS http://127.0.0.1:4793/health`: returned service liveness.
-- `curl -sS http://127.0.0.1:4793/ready`: returned expected missing `DATABASE_URL` blocker.
-- `curl -sS http://127.0.0.1:4793/api/documents`: returned empty list without database configuration.
-- `curl -sS http://127.0.0.1:4793/api/setup-readiness`: returned expected setup blockers.
+- `npm run verify`: passed at 2026-06-12T06:57:07Z.
+- `ARTIFACT_REVIEW_TEST_DATABASE_URL=<isolated local Postgres URL> npm run test:postgres`: passed at 2026-06-12T06:55:02Z.
+- `git diff --check`: passed before this continuity refresh.
 
-Not verified this session:
+Environment notes:
 
-- migration application against a real Postgres database
-- repository integration tests against Postgres
-- `npm run dev`
-- `npm run tauri:dev`
-- browser UI or desktop visual verification
+- `DATABASE_URL` was unset at session start.
+- `psql` and `pg_isready` were not on PATH.
+- Docker socket and local network checks required approval.
+- A local `memo-capture-postgres-16-8` container using `postgres:16.8-alpine` was already running on port `5432`.
+- Isolated database `artifact_review_test` exists in that container for Artifact Review validation.
+- Repo-local handoff helper scripts are absent; freshness is manually grounded from `git status`, `HEAD`, file inspection, and verification evidence.
 
 ## 7. Files to Open First
 
-- `AGENTS.md`
-- `README.md`
-- `docs/implementation-sequence.md`
-- `docs/data-model.md`
-- `docs/api-contract.md`
-- `docs/verification-plan.md`
-- `service/src/db/migrations.ts`
-- `service/src/db/lifecycle.ts`
-- `service/src/repositories/`
-- `service/src/http/server.ts`
-- `service/src/index.ts`
-- `tests/repositories.test.ts`
-- `docs/completed-tasks.md`
+- `AGENTS.md`: project constraints and commands.
+- `docs/implementation-sequence.md`: slice order and remaining workflow/ingest work.
+- `docs/api-contract.md`: current and reserved service endpoints.
+- `docs/data-model.md`: persistence ownership and workflow storage notes.
+- `service/src/workflow/definition.ts`: workflow validation and action derivation.
+- `service/src/repositories/workflows.ts`: active workflow persistence.
+- `service/src/http/server.ts`: workflow API implementation.
+- `tests/workflow.test.ts`: workflow validation unit coverage.
+- `tests/postgres.integration.test.ts`: opt-in real Postgres integration harness.
+- `docs/completed-tasks.md`: append-only completed work ledger.
 
 ## 8. Next Actions
 
 Next:
 
-- Configure an isolated Postgres database for Artifact Review tests.
-- Run service startup with `DATABASE_URL` and verify migrations create `schema_migrations` plus MVP tables.
-- Add database-backed repository integration tests or a documented deterministic Postgres test harness.
-- Continue to Build Slice 2: workflow definition import validation, activation, active workflow status, and allowed document actions.
+- Add HTTP-level tests for workflow validation, activation, allowed actions, and invalid transition rejection.
+- Decide whether to install/wire `state-workflow-runtime` now, or keep the internal workflow layer until ingest starts.
+- Start Build Slice 3 ingest by making `txt` file ingest create a document, first version, stable components, and initial workflow state from the active workflow entry state.
+- Keep ingest blocked with `workflow_not_configured` when no active workflow exists.
 
 Blocked:
 
-- Database-backed validation is blocked until `DATABASE_URL` or a dedicated test database URL points to available Postgres.
-- Provider-backed behavior is blocked until real registry client integration and selected profile handling are implemented.
+- Provider-backed behavior remains blocked until real registry client integration and selected-profile handling are implemented.
 
 Later:
 
-- Implement ingest and stable component persistence.
-- Implement review mutations and autosave.
+- Implement review mutation endpoints and autosave.
 - Wire provider-backed suggestions as proposal-only records.
 - Implement same-format export.
+- Run browser UI and Tauri desktop validation after user-facing flows are wired.
+
+## 9. Ready-Made Prompt for Starting a New Thread
+
+Read `handoff.md` as the hot-context source for `/Users/paulmarshall/Software Development/artifact-review`. Treat the current dirty tree as intentional and do not reset or discard changes. Review `AGENTS.md`, `docs/implementation-sequence.md`, `docs/api-contract.md`, `service/src/workflow/definition.ts`, `service/src/http/server.ts`, `tests/workflow.test.ts`, and `tests/postgres.integration.test.ts` first. Continue with HTTP-level workflow endpoint tests, then decide whether `state-workflow-runtime` should be installed before starting `txt` ingest. Distinguish confirmed repo state from recommendations, and load broader context only from canonical docs when the immediate task requires it.
