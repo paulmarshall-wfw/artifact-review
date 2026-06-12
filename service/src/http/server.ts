@@ -7,7 +7,10 @@ import { checkDatabase } from "../db/pool.js";
 import { combineReadiness } from "../domain/readiness.js";
 import { parseHtmlToComponents, parseMarkdownToComponents, parsePlainTextToComponents } from "../domain/parser.js";
 import { buildProviderReadiness } from "../providers/readiness.js";
-import { createRepositories } from "../repositories/index.js";
+import type { DocumentSummary, ReviewComponent } from "../repositories/documents.js";
+import { createRepositories, type Repositories } from "../repositories/index.js";
+import type { ReviewComponentForMutation } from "../repositories/review.js";
+import type { JsonValue } from "../repositories/types.js";
 import {
   findWorkflowAction,
   getAllowedWorkflowActions,
@@ -28,6 +31,100 @@ const urlIngestRequestSchema = z.object({
   name: z.string().min(1).optional(),
   snapshotHtml: z.string().min(1).optional()
 });
+
+const componentEditRequestSchema = z.object({
+  currentText: z.string().min(1),
+  editSource: z.enum(["manual", "accepted_ai_suggestion"]).default("manual")
+});
+
+const annotationRequestSchema = z.object({
+  body: z.string().min(1)
+});
+
+const questionRequestSchema = z.object({
+  body: z.string().min(1)
+});
+
+const evidenceRequestSchema = z.object({
+  kind: z.enum(["source", "link", "repo_path", "screenshot_path", "note"]),
+  value: z.string().min(1)
+});
+
+const highlightRequestSchema = z.object({
+  enabled: z.boolean()
+});
+
+function toSafeJson(value: unknown): JsonValue {
+  return JSON.parse(JSON.stringify(value)) as JsonValue;
+}
+
+async function createMutationAutosave(
+  repositories: Repositories,
+  action: string,
+  component: ReviewComponentForMutation,
+  payload: JsonValue
+) {
+  return repositories.review.createAutosaveSnapshot(
+    component.documentId,
+    toSafeJson({
+      action,
+      documentId: component.documentId,
+      componentId: component.id,
+      component: {
+        id: component.id,
+        kind: component.kind,
+        sectionId: component.sectionId,
+        sourceRange: component.sourceRange,
+        currentText: component.currentText,
+        originalTextHash: component.originalTextHash
+      },
+      payload
+    })
+  );
+}
+
+async function getComponentForMutation(repositories: Repositories, componentId: string) {
+  return repositories.review.getComponent(componentId);
+}
+
+async function buildReviewStateSnapshot(
+  repositories: Repositories,
+  document: DocumentSummary,
+  components: ReviewComponent[],
+  previousVersionNumber: number
+): Promise<JsonValue> {
+  const [annotations, questions, evidenceSources, highlights] = await Promise.all([
+    repositories.review.listAnnotations(document.id),
+    repositories.review.listQuestions(document.id),
+    repositories.review.listEvidenceSources(document.id),
+    repositories.review.listHighlights(document.id)
+  ]);
+
+  return toSafeJson({
+    snapshotType: "review-state",
+    document: {
+      id: document.id,
+      name: document.name,
+      sourceType: document.sourceType,
+      originalFormat: document.originalFormat,
+      currentWorkflowItemRef: document.currentWorkflowItemRef
+    },
+    previousVersionNumber,
+    componentCount: components.length,
+    components: components.map((component) => ({
+      id: component.id,
+      kind: component.kind,
+      sectionId: component.sectionId,
+      sourceRange: component.sourceRange,
+      currentText: component.currentText,
+      originalTextHash: component.originalTextHash
+    })),
+    annotations,
+    questions,
+    evidenceSources,
+    highlights
+  });
+}
 
 function parseFileContent(format: "txt" | "md" | "html" | "htm", content: string) {
   if (format === "html" || format === "htm") {
@@ -251,7 +348,13 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
     response.json({
       document,
       versions: await repositories.documents.getDocumentVersions(document.id),
-      components: await repositories.documents.getReviewComponents(document.id)
+      components: await repositories.documents.getReviewComponents(document.id),
+      review: {
+        annotations: await repositories.review.listAnnotations(document.id),
+        questions: await repositories.review.listQuestions(document.id),
+        evidenceSources: await repositories.review.listEvidenceSources(document.id),
+        highlights: await repositories.review.listHighlights(document.id)
+      }
     });
   });
 
@@ -520,6 +623,259 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       workflow: {
         currentState: initialState,
         actions: getAllowedWorkflowActions(activeWorkflow, initialState)
+      }
+    });
+  });
+
+  app.patch("/api/components/:componentId", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before editing review components."
+      });
+      return;
+    }
+
+    const parsedRequest = componentEditRequestSchema.safeParse(request.body);
+    if (!parsedRequest.success) {
+      response.status(422).json({
+        error: "invalid_component_edit_request",
+        issues: parsedRequest.error.issues.map((issue) => `${issue.path.join(".") || "request"}: ${issue.message}`)
+      });
+      return;
+    }
+
+    const result = await repositories.review.updateComponentText(
+      request.params.componentId,
+      parsedRequest.data.currentText,
+      parsedRequest.data.editSource
+    );
+    if (!result) {
+      response.status(404).json({
+        error: "component_not_found",
+        componentId: request.params.componentId
+      });
+      return;
+    }
+
+    const autosave = await createMutationAutosave(repositories, "component_text_edited", result.component, {
+      revisionId: result.revision.id,
+      previousText: result.revision.previousText,
+      revisedText: result.revision.revisedText,
+      editSource: result.revision.editSource
+    });
+
+    response.json({
+      component: result.component,
+      revision: result.revision,
+      autosave
+    });
+  });
+
+  app.post("/api/components/:componentId/annotations", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before adding annotations."
+      });
+      return;
+    }
+
+    const parsedRequest = annotationRequestSchema.safeParse(request.body);
+    if (!parsedRequest.success) {
+      response.status(422).json({
+        error: "invalid_annotation_request",
+        issues: parsedRequest.error.issues.map((issue) => `${issue.path.join(".") || "request"}: ${issue.message}`)
+      });
+      return;
+    }
+
+    const component = await getComponentForMutation(repositories, request.params.componentId);
+    if (!component) {
+      response.status(404).json({
+        error: "component_not_found",
+        componentId: request.params.componentId
+      });
+      return;
+    }
+
+    const annotation = await repositories.review.createAnnotation(component.id, parsedRequest.data.body);
+    const autosave = await createMutationAutosave(repositories, "annotation_added", component, {
+      annotationId: annotation.id,
+      body: annotation.body
+    });
+
+    response.status(201).json({ annotation, autosave });
+  });
+
+  app.post("/api/components/:componentId/questions", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before adding questions."
+      });
+      return;
+    }
+
+    const parsedRequest = questionRequestSchema.safeParse(request.body);
+    if (!parsedRequest.success) {
+      response.status(422).json({
+        error: "invalid_question_request",
+        issues: parsedRequest.error.issues.map((issue) => `${issue.path.join(".") || "request"}: ${issue.message}`)
+      });
+      return;
+    }
+
+    const component = await getComponentForMutation(repositories, request.params.componentId);
+    if (!component) {
+      response.status(404).json({
+        error: "component_not_found",
+        componentId: request.params.componentId
+      });
+      return;
+    }
+
+    const question = await repositories.review.createQuestion(component.id, parsedRequest.data.body);
+    const autosave = await createMutationAutosave(repositories, "question_added", component, {
+      questionId: question.id,
+      body: question.body,
+      status: question.status
+    });
+
+    response.status(201).json({ question, autosave });
+  });
+
+  app.post("/api/components/:componentId/evidence", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before adding evidence."
+      });
+      return;
+    }
+
+    const parsedRequest = evidenceRequestSchema.safeParse(request.body);
+    if (!parsedRequest.success) {
+      response.status(422).json({
+        error: "invalid_evidence_request",
+        issues: parsedRequest.error.issues.map((issue) => `${issue.path.join(".") || "request"}: ${issue.message}`)
+      });
+      return;
+    }
+
+    const component = await getComponentForMutation(repositories, request.params.componentId);
+    if (!component) {
+      response.status(404).json({
+        error: "component_not_found",
+        componentId: request.params.componentId
+      });
+      return;
+    }
+
+    const evidence = await repositories.review.createEvidenceSource(
+      component.id,
+      parsedRequest.data.kind,
+      parsedRequest.data.value
+    );
+    const autosave = await createMutationAutosave(repositories, "evidence_added", component, {
+      evidenceId: evidence.id,
+      kind: evidence.kind,
+      value: evidence.value
+    });
+
+    response.status(201).json({ evidence, autosave });
+  });
+
+  app.patch("/api/components/:componentId/highlight", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before updating highlights."
+      });
+      return;
+    }
+
+    const parsedRequest = highlightRequestSchema.safeParse(request.body);
+    if (!parsedRequest.success) {
+      response.status(422).json({
+        error: "invalid_highlight_request",
+        issues: parsedRequest.error.issues.map((issue) => `${issue.path.join(".") || "request"}: ${issue.message}`)
+      });
+      return;
+    }
+
+    const component = await getComponentForMutation(repositories, request.params.componentId);
+    if (!component) {
+      response.status(404).json({
+        error: "component_not_found",
+        componentId: request.params.componentId
+      });
+      return;
+    }
+
+    const highlight = await repositories.review.setHighlight(component.id, parsedRequest.data.enabled);
+    const autosave = await createMutationAutosave(repositories, "highlight_updated", component, {
+      enabled: highlight.enabled
+    });
+
+    response.json({ highlight, autosave });
+  });
+
+  app.post("/api/documents/:documentId/save", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before saving documents."
+      });
+      return;
+    }
+
+    const document = await repositories.documents.getDocument(request.params.documentId);
+    if (!document) {
+      response.status(404).json({
+        error: "document_not_found",
+        documentId: request.params.documentId
+      });
+      return;
+    }
+
+    const versions = await repositories.documents.getDocumentVersions(document.id);
+    const sourceVersion = versions[0];
+    if (!sourceVersion) {
+      response.status(409).json({
+        error: "document_version_missing",
+        documentId: document.id,
+        message: "The document has no imported source version to preserve."
+      });
+      return;
+    }
+
+    const previousVersionNumber = versions.reduce(
+      (highest, version) => Math.max(highest, version.versionNumber),
+      sourceVersion.versionNumber
+    );
+    const components = await repositories.documents.getReviewComponents(document.id);
+    const snapshot = await buildReviewStateSnapshot(repositories, document, components, previousVersionNumber);
+    const version = await repositories.documents.createDocumentVersion({
+      documentId: document.id,
+      versionNumber: previousVersionNumber + 1,
+      sourceSnapshot: sourceVersion.sourceSnapshot,
+      currentSnapshot: JSON.stringify(snapshot, null, 2),
+      parserMetadata: {
+        parser: "review-state-snapshot",
+        savedFrom: "document-save",
+        previousVersionNumber,
+        componentCount: components.length
+      }
+    });
+
+    response.status(201).json({
+      document,
+      version,
+      snapshot: {
+        type: "review-state",
+        componentCount: components.length,
+        previousVersionNumber
       }
     });
   });

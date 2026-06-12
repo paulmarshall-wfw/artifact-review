@@ -66,20 +66,30 @@ Completed:
 - Add stable HTML paragraph sentence, list item, and table body row components with source mappings and heading section anchors.
 - Implement URL snapshot ingest.
 - Add repository-backed URL snapshot document/version/component creation using the HTML parser, including caller-supplied snapshot HTML and service-side URL fetch paths.
+- Autosave staged review changes.
+- Add review-mutation autosave snapshots that preserve component IDs, source mappings, original text hashes, and imported source snapshots.
 
 Remaining:
 
-- Autosave staged review changes.
+- UI ingest wiring and desktop validation.
 
 ## Build Slice 4: Review Mutation Surface
 
 Purpose: support human review before AI assistance.
 
-- Implement component edit endpoint.
+Completed:
+
+- Implement component edit endpoint with `component_revisions` audit records.
 - Implement annotations, questions, evidence, and highlights.
-- Implement save as a durable document version.
-- Return compact document rows separately from full document/component data.
-- Preserve audit history for all text mutations.
+- Implement autosave snapshots for review mutations.
+- Implement save as a durable document version that preserves the imported source snapshot and stores JSON review-state `current_snapshot` data.
+- Return compact document rows separately from full document/component/review data.
+- Preserve audit history for text mutations.
+
+Remaining:
+
+- Wire these service endpoints into the React review workspace.
+- Keep same-format output reconstruction in Build Slice 6 export.
 
 ## Build Slice 5: Provider-Backed Suggestions
 

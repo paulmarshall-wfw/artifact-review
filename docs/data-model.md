@@ -53,6 +53,14 @@ Artifact Review owns document workflow state in its own database. Active documen
 
 The ingest path now creates a document row, version `1`, and stable review components in one service operation for local `txt`, `md`, `html`, and `htm` files plus URL snapshots. Plain text creates sentence components. Markdown creates heading, sentence, and bullet components while using headings as section anchors for following content. HTML, HTM, and URL snapshots create paragraph sentence, list item, and table body row components while using headings as section anchors rather than inline review targets. URL snapshots store `documents.source_type = "url"`, `documents.original_format = "url_snapshot"`, and parser metadata containing the source URL, snapshot source (`provided` or `fetched`), and fetch metadata when applicable. Review components preserve source offsets in `review_components.source_range` and keep the original text hash beside the current text so later review mutations can be audited against the imported source.
 
+Review mutation endpoints now write app-owned review records through the service boundary:
+
+- `PATCH /api/components/:componentId` updates `review_components.current_text` and creates a `component_revisions` audit row.
+- Annotation, question, evidence, and highlight endpoints write to their matching review tables after confirming the component exists.
+- Each review mutation writes an `autosave_snapshots` row with the changed component ID, source mapping, current text, and mutation payload.
+- Autosave snapshots do not mutate `document_versions`; imported source snapshots remain immutable.
+- `POST /api/documents/:documentId/save` creates a new `document_versions` row, preserves the first imported `source_snapshot`, and stores the reviewed component/review-record state as a JSON `current_snapshot` until same-format export is implemented.
+
 The `state-workflow-runtime` storage adapter has not been installed or wired yet. Until then, the service validates the same explicit workflow shape and derives allowed user actions from the active app-owned definition.
 
 The repo-stored workflow definition is an importable fixture:
@@ -75,4 +83,5 @@ The first data implementation slice now includes:
 Still remaining after the initial persistence foundation and ingest slices:
 
 - workflow storage adapter for document lifecycle state
-- review mutation endpoints
+- provider-backed suggestions
+- same-format export

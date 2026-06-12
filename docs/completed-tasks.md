@@ -4,6 +4,11 @@ Append brief entries here when project work is completed. Keep this file concise
 
 ## 2026-06-12
 
+- Task: Continue the next three app build slices with autosave, review mutations, and save promotion.
+  Outcome: Added a review repository and service endpoints for component text edits, annotations, questions, evidence, highlights, mutation autosave snapshots, and document save-to-version promotion. Component edits now create audited `component_revisions`, review mutations create `autosave_snapshots` without touching imported source snapshots, document detail returns review records, and save creates a new review-state version while preserving the original source snapshot.
+  Verification: `npm run verify` passed with 7 test files, 1 skipped Postgres suite, 28 tests passed, and 2 skipped; lint and Vite build also passed.
+  Traceability: Git branch `main` at `3cdffed`; no commit yet; changed review repository/API code, review HTTP tests, API/data/implementation/verification docs, completed-task ledger, and handoff.
+
 - Task: Continue Build Slice 3 with URL snapshot ingest.
   Outcome: Implemented `/api/ingest/url` as a repository-backed URL snapshot ingest path; it now requires database and active workflow readiness, accepts caller-supplied snapshot HTML or fetches `http`/`https` URLs, reuses the HTML parser, stores document/version/component records with `sourceType: "url"` and `originalFormat: "url_snapshot"`, and records URL/fetch parser metadata.
   Verification: `npm run verify` passed with 6 test files, 1 skipped Postgres suite, 25 tests passed, and 2 skipped; lint and Vite build also passed.

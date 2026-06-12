@@ -4,15 +4,15 @@
 
 - Project name: Artifact Review
 - Handoff type: implementation handoff
-- Updated timestamp UTC: 2026-06-12T08:50:57Z
+- Updated timestamp UTC: 2026-06-12T11:33:58Z
 - Prepared by: Codex
 - Repository, workspace, or folder: `/Users/paulmarshall/Software Development/artifact-review`
-- Branch or working context: Git branch `main`; current HEAD `935d185`; branch is 7 commits ahead of `origin/main`
-- Session scope: continued Build Slice 3 with URL snapshot ingest
+- Branch or working context: Git branch `main`; current HEAD `3cdffed`; branch is 8 commits ahead of `origin/main`
+- Session scope: continued the next three app build slices: autosave staged review changes, human review mutations, and save-to-version promotion.
 
 ### Checkpoint Status
 
-- Git HEAD: `935d185`
+- Git HEAD: `3cdffed`
 - Working tree: dirty
 - Dirty files intentionally in scope:
   - `docs/api-contract.md`
@@ -21,30 +21,27 @@
   - `docs/implementation-sequence.md`
   - `docs/verification-plan.md`
   - `handoff.md`
-  - `service/src/domain/parser.ts`
   - `service/src/http/server.ts`
-  - `tests/http-ingest.test.ts`
-  - `tests/parser.test.ts`
-- Dirty files intentionally out of scope:
-  - None
+  - `service/src/repositories/index.ts`
 - Untracked files intentionally in scope:
-  - None
-- Untracked files intentionally out of scope:
+  - `service/src/repositories/review.ts`
+  - `tests/http-review.test.ts`
+- Dirty or untracked files intentionally out of scope:
   - None
 - Last verification:
   - command: `npm run verify`
-  - result: passed with 6 test files, 1 skipped Postgres suite, 25 tests passed, and 2 skipped; lint and Vite build also passed
-  - timestamp UTC: 2026-06-12T08:50:49Z
+  - result: passed with 7 test files, 1 skipped Postgres suite, 28 tests passed, and 2 skipped; lint and Vite build also passed
+  - timestamp UTC: 2026-06-12T11:33:47Z
 - Last Postgres integration verification:
   - command: `ARTIFACT_REVIEW_TEST_DATABASE_URL=<isolated local Postgres URL> npm run test:postgres`
   - result: passed with 2 tests
   - timestamp UTC: 2026-06-12T06:55:02Z
 - Handoff freshness: fresh-to-dirty-tree
-- Safe-to-continue basis: current `HEAD` and all dirty files are accounted for; full local verification passed after this slice.
+- Safe-to-continue basis: current `HEAD` and all dirty/untracked files are accounted for; full local verification passed after this slice.
 
 ## 2. Executive Summary
 
-Current focus is Artifact Review backend-owned workflow plus ingest.
+Current focus is Artifact Review backend-owned review behavior before provider assistance.
 
 Confirmed complete now:
 
@@ -52,62 +49,70 @@ Confirmed complete now:
 - Build Slice 2 workflow validation, activation, status, allowed actions, guarded transitions, and HTTP endpoint coverage.
 - Build Slice 3 file ingest for `txt`, `md`, `html`, and `htm`.
 - Build Slice 3 URL snapshot ingest.
-- `txt` ingest creates stable sentence components with source ranges.
-- `md` ingest creates stable Markdown heading, prose sentence, and bullet components with source ranges; headings also anchor section IDs for following content.
-- `html`/`htm` ingest creates stable paragraph sentence, HTML list item, and table body row components with source ranges; headings anchor sections and are not inline review targets.
-- URL snapshot ingest accepts caller-supplied snapshot HTML or fetches `http`/`https` URLs, reuses the HTML parser, and stores source/fetch metadata.
-- Ingest creates document, version `1`, parser metadata, review components, and initial workflow entry state when database and active workflow are configured.
-- Continuity docs refreshed for the current dirty tree.
+- Build Slice 3 autosave support for staged review mutations.
+- Build Slice 4 backend review mutation surface:
+  - `PATCH /api/components/:componentId`
+  - `POST /api/components/:componentId/annotations`
+  - `POST /api/components/:componentId/questions`
+  - `POST /api/components/:componentId/evidence`
+  - `PATCH /api/components/:componentId/highlight`
+  - `POST /api/documents/:documentId/save`
+- Component edits create audited `component_revisions`.
+- Annotation, question, evidence, and highlight mutations create `autosave_snapshots`.
+- Save creates a new `document_versions` row with the imported source snapshot preserved and JSON review-state data in `current_snapshot`.
+- Document detail now returns review records alongside document, versions, and components.
 
 Incomplete now:
 
 - `state-workflow-runtime` is not installed or wired.
-- Review mutations, autosave, provider invocation, suggestion accept/reject, export, browser UI validation, and Tauri validation are still pending.
+- React UI wiring for ingest/review/edit/save is still pending.
+- Provider invocation, suggestion accept/reject, export, browser UI validation, and Tauri validation are still pending.
 
-Safe to continue from this dirty tree. Completed work history is tracked in `docs/completed-tasks.md`; do not duplicate it here.
+Completed work history is tracked in `docs/completed-tasks.md`; do not duplicate it here.
 
 ## 3. Current Objective
 
-Continue Build Slice 3 beyond URL snapshot ingest.
+Continue after the service-backed review mutation/save slices.
 
 Definition of done for the next workstream:
 
-- Add autosave staged review changes without making React the owner of durable document mutations.
-- Preserve stable component IDs, source mappings, and imported source snapshots.
-- Keep ingest blocked with `workflow_not_configured` when no active workflow exists.
-- Keep the repo workflow fixture importable but never auto-activated.
+- Wire the React review workspace to repository-backed document list/detail, review components, mutations, autosave status, and save.
 - Preserve backend-owned workflow state and render allowed actions from service responses.
-- Do not install `state-workflow-runtime` or other dependencies unless explicitly approved.
+- Keep provider-backed suggestions proposal-only and blocked until registry/provider readiness is actually wired.
+- Preserve stable component IDs, source mappings, original text hashes, and imported source snapshots.
+- Do not install `state-workflow-runtime`, provider runtime packages, or other dependencies unless explicitly approved.
 
 ## 4. Current State
 
 ### Working
 
 - `npm run verify` passes.
-- `npm run test:postgres` passed previously when `ARTIFACT_REVIEW_TEST_DATABASE_URL` pointed at a reachable isolated Postgres database.
-- Default tests skip the Postgres integration suite when the URL is absent.
+- Default tests skip the Postgres integration suite when `ARTIFACT_REVIEW_TEST_DATABASE_URL` is absent.
+- `npm run test:postgres` passed previously when pointed at an isolated local Postgres database.
 - Service startup runs migrations when `DATABASE_URL` is configured.
 - Migrations are idempotent against real Postgres.
 - Repositories round-trip document, version, component, app setting, task run, suggestion, and active workflow records against real Postgres.
-- `/api/workflow/status`, `/api/workflow/definitions/validate`, `/api/workflow/activate`, `/api/workflow/documents/:documentId/actions`, and `/api/workflow/documents/:documentId/actions/:actionId` are implemented and covered by HTTP tests.
-- `/api/ingest/file` supports `{ name, format: "txt" | "md" | "html" | "htm", content }` when database and active workflow are configured.
-- `/api/ingest/url` supports `{ url, name?, snapshotHtml? }` when database and active workflow are configured; it accepts supplied snapshot HTML or fetches `http`/`https` URLs.
-- `txt` ingest creates source-range-backed sentence components and starts the document in the active workflow entry state.
-- `md` ingest creates source-range-backed heading, sentence, and bullet components, including ordered-list items as bullet components.
-- `html`/`htm` ingest creates source-range-backed paragraph sentence, HTML list item, and table body row components; headings become section anchors only.
-- URL snapshot ingest creates source-range-backed paragraph sentence, HTML list item, and table body row components; parser metadata records source URL, snapshot source, and fetch status/content type/final URL when fetched.
-- `/api/setup-readiness` uses persisted active workflow state.
+- `/api/workflow/status`, `/api/workflow/definitions/validate`, `/api/workflow/activate`, `/api/workflow/documents/:documentId/actions`, and `/api/workflow/documents/:documentId/actions/:actionId` are implemented and covered.
+- `/api/ingest/file` supports `txt`, `md`, `html`, and `htm` when database and active workflow are configured.
+- `/api/ingest/url` supports caller-supplied snapshot HTML or fetched `http`/`https` URL snapshots.
+- `/api/components/:componentId` edits current component text and writes an audit revision.
+- Annotation, question, evidence, and highlight endpoints write review records and autosave snapshots.
+- `/api/documents/:documentId/save` creates a new review-state document version while preserving the imported source snapshot.
 
 ### Partially Working
 
 - Workflow operations are backend-owned but not yet backed by `state-workflow-runtime`.
 - Workflow activation is API-only; no UI surface exists yet.
-- Ingest supports local `txt`, `md`, `html`, and `htm` files plus URL snapshots through the service API only.
+- Review mutation endpoints are service-backed but not yet wired into React.
+- Save stores JSON review-state snapshots; same-format export is intentionally deferred to Build Slice 6.
 
 ### Not Working Yet
 
 - `state-workflow-runtime` adapter.
-- Review mutation endpoints, autosave, provider-backed suggestions, suggestion accept/reject, and export.
+- Provider-backed suggestions.
+- Suggestion accept/reject.
+- Same-format export.
+- Review workspace UI wiring.
 
 ### Not Yet Verified
 
@@ -132,7 +137,10 @@ Definition of done for the next workstream:
 
 Most recent verified commands:
 
-- `npm run verify`: passed at 2026-06-12T08:50:49Z.
+- `npm run verify`: passed at 2026-06-12T11:33:47Z.
+- `npm run lint`: passed during `npm run verify`.
+- `npm test`: passed during `npm run verify` with 7 test files, 1 skipped Postgres suite, 28 tests passed, and 2 skipped.
+- `npm run build`: passed during `npm run verify`.
 - `ARTIFACT_REVIEW_TEST_DATABASE_URL=<isolated local Postgres URL> npm run test:postgres`: passed at 2026-06-12T06:55:02Z.
 
 Environment notes:
@@ -146,35 +154,38 @@ Environment notes:
 ## 7. Files to Open First
 
 - `AGENTS.md`: project constraints and commands.
-- `docs/implementation-sequence.md`: slice order and remaining ingest work.
+- `docs/implementation-sequence.md`: slice order and remaining work.
 - `docs/api-contract.md`: current and reserved service endpoints.
-- `docs/data-model.md`: persistence ownership and ingest storage notes.
-- `service/src/domain/parser.ts`: plain-text, Markdown, and HTML parsers plus source-range behavior.
-- `service/src/http/server.ts`: workflow and ingest API implementation.
-- `service/src/workflow/definition.ts`: workflow validation and action derivation.
+- `docs/data-model.md`: persistence ownership and review storage notes.
+- `service/src/http/server.ts`: workflow, ingest, review mutation, autosave, and save API implementation.
+- `service/src/repositories/review.ts`: review records, autosave, and component revision repository behavior.
+- `service/src/repositories/documents.ts`: document, version, and component repository behavior.
+- `tests/http-review.test.ts`: review mutation, autosave, and save endpoint coverage.
 - `tests/http-ingest.test.ts`: ingest HTTP coverage.
 - `tests/http-workflow.test.ts`: workflow endpoint coverage.
-- `tests/helpers/http.ts`: in-process Express request harness.
 - `docs/completed-tasks.md`: append-only completed work ledger.
 
 ## 8. Next Actions
 
 Next:
 
-- Implement autosave staged review changes as repository-backed service behavior.
-- Add focused autosave tests that prove saved staging state does not mutate imported source snapshots or bypass workflow ownership.
+- Wire the React review workspace to document list/detail, review components, review mutations, autosave state, and save.
+- Keep the UI dense and stable: durable shell, document list/detail, inline review controls, and save/autosave state.
+- Add focused UI/service tests for the wired review flows where practical.
 
-Blocked:
+Blocked or deferred:
 
 - Provider-backed behavior remains blocked until real registry client integration and selected-profile handling are implemented.
+- Same-format export remains Build Slice 6.
+- Tauri desktop validation should wait until user-facing review flows are wired.
 
 Later:
 
-- Implement review mutation endpoints.
 - Wire provider-backed suggestions as proposal-only records.
+- Implement suggestion accept/reject.
 - Implement same-format export.
-- Run browser UI and Tauri desktop validation after user-facing flows are wired.
+- Run Chrome/browser UI and Tauri desktop validation after user-facing flows are wired.
 
 ## 9. Ready-Made Prompt for Starting a New Thread
 
-Read `handoff.md` as the hot-context source for `/Users/paulmarshall/Software Development/artifact-review`. Treat the current dirty tree as intentional and do not reset or discard changes. Review `AGENTS.md`, `docs/implementation-sequence.md`, `docs/api-contract.md`, `docs/data-model.md`, `service/src/domain/parser.ts`, `service/src/http/server.ts`, `tests/http-ingest.test.ts`, and `tests/http-workflow.test.ts` first. Continue Build Slice 3 with autosave staged review changes, preserving backend-owned workflow state, stable component IDs, source mappings, and immutable imported source snapshots. Distinguish confirmed repo state from recommendations, and load broader context only from canonical docs when the immediate task requires it.
+Read `handoff.md` as the hot-context source for `/Users/paulmarshall/Software Development/artifact-review`. Treat the current dirty/untracked tree as intentional and do not reset or discard changes. Review `AGENTS.md`, `docs/implementation-sequence.md`, `docs/api-contract.md`, `docs/data-model.md`, `service/src/http/server.ts`, `service/src/repositories/review.ts`, `service/src/repositories/documents.ts`, and `tests/http-review.test.ts` first. Continue by wiring the React review workspace to repository-backed document detail, review mutations, autosave state, and save. Preserve backend-owned workflow state, stable component IDs, source mappings, original text hashes, and immutable imported source snapshots. Do not install dependencies, commit, release, or wire provider/runtime packages unless explicitly approved.
