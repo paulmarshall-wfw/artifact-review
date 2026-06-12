@@ -1,0 +1,25 @@
+import { describe, expect, it } from "vitest";
+import { loadConfig } from "../service/src/config/env";
+import { buildProviderReadiness, resolveSelectedProfile } from "../service/src/providers/readiness";
+
+describe("provider readiness", () => {
+  it("does not silently create readiness when registry and profile are missing", () => {
+    const config = loadConfig({});
+    const readiness = buildProviderReadiness(config);
+
+    expect(readiness.ready).toBe(false);
+    expect(readiness.checks.find((check) => check.key === "registry-url")?.ready).toBe(false);
+    expect(readiness.checks.find((check) => check.key === "selected-profile")?.ready).toBe(false);
+  });
+
+  it("keeps a saved selected provider profile ahead of the bootstrap environment profile", () => {
+    const config = loadConfig({
+      INVOKE_PROVIDERS_PROFILE: "bootstrap-profile",
+      INVOKE_PROVIDERS_REGISTRY_URL: "http://127.0.0.1:5181",
+      ARTIFACT_REVIEW_DEMO_PROVIDER_MODE: "true"
+    });
+
+    expect(resolveSelectedProfile(config, { selectedProviderProfileKey: "saved-profile" })).toBe("saved-profile");
+  });
+});
+
