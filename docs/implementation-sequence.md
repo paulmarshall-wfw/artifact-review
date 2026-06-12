@@ -60,10 +60,12 @@ Completed:
 - Implement file ingest for `txt`.
 - Add stable sentence component IDs and source mappings.
 - Store document version `1`, review components, parser metadata, and initial workflow state from the active workflow entry state.
+- Implement file ingest for `md`.
+- Add stable Markdown heading, prose sentence, and bullet components with source mappings.
 
 Remaining:
 
-- Add `md`, then `html` and `htm` ingest.
+- Add `html` and `htm` ingest.
 - Add URL snapshot ingest after local file formats are stable.
 - Autosave staged review changes.
 

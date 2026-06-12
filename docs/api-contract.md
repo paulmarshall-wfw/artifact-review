@@ -18,7 +18,7 @@ Artifact Review uses a local TypeScript service as the only HTTP API boundary fo
 | `GET` | `/api/documents/:documentId` | Returns repository-backed document, versions, and review components when present; otherwise returns `404 document_not_found`. |
 | `GET` | `/api/workflow/documents/:documentId/actions` | Returns backend-derived visible user actions for the document's current workflow state. |
 | `POST` | `/api/workflow/documents/:documentId/actions/:actionId` | Executes an allowed visible user workflow action and updates the document state. |
-| `POST` | `/api/ingest/file` | Ingests `txt` file payloads into a document, first version, review components, and the active workflow entry state when database and workflow are configured. |
+| `POST` | `/api/ingest/file` | Ingests `txt` and `md` file payloads into a document, first version, review components, and the active workflow entry state when database and workflow are configured. |
 | `POST` | `/api/ingest/url` | Returns `409 workflow_not_configured` until workflow import/activation exists. |
 | `POST` | `/api/components/:componentId/ai-suggestions` | Blocks when provider readiness fails; otherwise returns `501 provider_runtime_not_wired`. |
 | `POST` | `/api/ai-suggestions/:suggestionId/accept` | Returns `501 suggestion_accept_not_wired`. |
@@ -51,7 +51,7 @@ These routes are reserved by the MVP plan and should be implemented incrementall
 - Workflow state must be returned by the service and must not be inferred as durable truth in React.
 - Workflow validation failures return `422` with `valid: false` and stable error strings.
 - Workflow action execution rejects invalid transitions with `409 workflow_action_not_allowed`.
-- File ingest accepts `{ name: string, format: "txt", content: string }`; malformed payloads return `422 invalid_ingest_file_request`, and text with no reviewable components returns `422 no_reviewable_components`.
+- File ingest accepts `{ name: string, format: "txt" | "md", content: string }`; malformed payloads return `422 invalid_ingest_file_request`, and content with no reviewable components returns `422 no_reviewable_components`.
 - File ingest without a configured database returns `409 database_not_configured`; file ingest without an active workflow returns `409 workflow_not_configured`.
 
 ## Tauri Command Boundary

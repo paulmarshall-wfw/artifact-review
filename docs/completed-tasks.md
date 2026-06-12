@@ -4,6 +4,11 @@ Append brief entries here when project work is completed. Keep this file concise
 
 ## 2026-06-12
 
+- Task: Continue Build Slice 3 with Markdown ingest.
+  Outcome: Added Markdown file ingest beside existing plain-text ingest; Markdown parsing now creates stable heading, prose sentence, and bullet components with source ranges and section anchors while preserving original format and parser metadata in repository-backed document/version records.
+  Verification: `npm run verify` passed with 6 test files, 1 skipped Postgres suite, 19 tests passed, and 2 skipped.
+  Traceability: Git branch `main` at `27ca35b`; no commit yet; changed parser/HTTP ingest code, parser and HTTP ingest tests, API/data/implementation/verification docs, completed-task ledger, and handoff.
+
 - Task: Add workflow endpoint coverage and first `txt` ingest.
   Outcome: Added in-process HTTP endpoint tests for workflow validation, activation, status, allowed actions, invalid transitions, and file ingest; implemented `txt` ingest to create a document, version `1`, stable sentence components with source ranges, parser metadata, and the active workflow entry state.
   Verification: `npm run verify` passed with 6 test files, 1 skipped Postgres suite, 16 tests passed, and 2 skipped.

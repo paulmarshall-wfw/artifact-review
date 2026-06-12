@@ -142,4 +142,171 @@ describe("file ingest HTTP endpoint", () => {
       expect.any(String)
     ]);
   });
+
+  it("creates markdown heading, sentence, and bullet components for md files", async () => {
+    const now = new Date("2026-06-12T00:00:00.000Z");
+    const source = "# Title\n\nIntro sentence. More detail.\n- First point\n- Second point\n";
+    const db = createQueuedDatabase([
+      [{ value: workflowFixture }],
+      [
+        {
+          id: "document-md-1",
+          project_id: null,
+          name: "Draft.md",
+          source_type: "file",
+          original_format: "md",
+          current_workflow_item_ref: "ingestion",
+          ingested_at: now,
+          updated_at: now
+        }
+      ],
+      [
+        {
+          id: "version-md-1",
+          document_id: "document-md-1",
+          version_number: 1,
+          source_snapshot: source,
+          current_snapshot: source,
+          parser_metadata: { parser: "markdown-components", componentCount: 5 },
+          created_at: now
+        }
+      ],
+      [
+        {
+          id: "markdown_heading_0_2c70e12b7a06",
+          document_id: "document-md-1",
+          kind: "markdown_heading",
+          section_id: "section-0",
+          source_range: { start: 2, end: 7 },
+          current_text: "Title",
+          original_text_hash: "hash-title",
+          created_at: now,
+          updated_at: now
+        }
+      ],
+      [
+        {
+          id: "sentence_1_b01f6c6c89b4",
+          document_id: "document-md-1",
+          kind: "paragraph_sentence",
+          section_id: "section-0",
+          source_range: { start: 9, end: 24 },
+          current_text: "Intro sentence.",
+          original_text_hash: "hash-intro",
+          created_at: now,
+          updated_at: now
+        }
+      ],
+      [
+        {
+          id: "sentence_2_876d0fbbf525",
+          document_id: "document-md-1",
+          kind: "paragraph_sentence",
+          section_id: "section-0",
+          source_range: { start: 25, end: 37 },
+          current_text: "More detail.",
+          original_text_hash: "hash-detail",
+          created_at: now,
+          updated_at: now
+        }
+      ],
+      [
+        {
+          id: "markdown_bullet_3_039c6e4ee2fd",
+          document_id: "document-md-1",
+          kind: "markdown_bullet",
+          section_id: "section-0",
+          source_range: { start: 40, end: 51 },
+          current_text: "First point",
+          original_text_hash: "hash-first",
+          created_at: now,
+          updated_at: now
+        }
+      ],
+      [
+        {
+          id: "markdown_bullet_4_901b8a2724f1",
+          document_id: "document-md-1",
+          kind: "markdown_bullet",
+          section_id: "section-0",
+          source_range: { start: 54, end: 66 },
+          current_text: "Second point",
+          original_text_hash: "hash-second",
+          created_at: now,
+          updated_at: now
+        }
+      ]
+    ]);
+
+    const response = await requestApp(createTestServer(db), "POST", "/api/ingest/file", {
+      name: "Draft.md",
+      format: "md",
+      content: source
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      document: {
+        id: "document-md-1",
+        name: "Draft.md",
+        sourceType: "file",
+        originalFormat: "md",
+        currentWorkflowItemRef: "ingestion"
+      },
+      version: {
+        id: "version-md-1",
+        documentId: "document-md-1",
+        versionNumber: 1
+      },
+      components: [
+        { kind: "markdown_heading", sourceRange: { start: 2, end: 7 }, currentText: "Title" },
+        { kind: "paragraph_sentence", sourceRange: { start: 9, end: 24 }, currentText: "Intro sentence." },
+        { kind: "paragraph_sentence", sourceRange: { start: 25, end: 37 }, currentText: "More detail." },
+        { kind: "markdown_bullet", sourceRange: { start: 40, end: 51 }, currentText: "First point" },
+        { kind: "markdown_bullet", sourceRange: { start: 54, end: 66 }, currentText: "Second point" }
+      ],
+      workflow: {
+        currentState: "ingestion",
+        actions: []
+      }
+    });
+    expect(db.queries[1]?.values).toEqual([
+      expect.any(String),
+      null,
+      "Draft.md",
+      "file",
+      "md",
+      "ingestion"
+    ]);
+    expect(db.queries[2]?.values).toEqual([
+      expect.any(String),
+      "document-md-1",
+      1,
+      source,
+      source,
+      { parser: "markdown-components", componentCount: 5 }
+    ]);
+    const sectionId = db.queries[3]?.values?.[3];
+    expect(db.queries[3]?.values?.slice(2, 7)).toEqual([
+      "markdown_heading",
+      sectionId,
+      { start: 2, end: 7 },
+      "Title",
+      expect.any(String)
+    ]);
+    expect(db.queries[4]?.values?.slice(2, 7)).toEqual([
+      "paragraph_sentence",
+      sectionId,
+      { start: 9, end: 24 },
+      "Intro sentence.",
+      expect.any(String)
+    ]);
+    expect(db.queries[6]?.values?.slice(2, 7)).toEqual([
+      "markdown_bullet",
+      sectionId,
+      { start: 40, end: 51 },
+      "First point",
+      expect.any(String)
+    ]);
+  });
 });

@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { AppConfig } from "../config/env.js";
 import { checkDatabase } from "../db/pool.js";
 import { combineReadiness } from "../domain/readiness.js";
-import { parsePlainTextToComponents } from "../domain/parser.js";
+import { parseMarkdownToComponents, parsePlainTextToComponents } from "../domain/parser.js";
 import { buildProviderReadiness } from "../providers/readiness.js";
 import { createRepositories } from "../repositories/index.js";
 import {
@@ -19,9 +19,31 @@ import { buildWorkflowReadiness } from "../workflow/readiness.js";
 
 const fileIngestRequestSchema = z.object({
   name: z.string().min(1),
-  format: z.literal("txt"),
+  format: z.enum(["txt", "md"]),
   content: z.string().min(1)
 });
+
+function parseFileContent(format: "txt" | "md", content: string) {
+  if (format === "md") {
+    const components = parseMarkdownToComponents(content);
+    return {
+      components,
+      parserMetadata: {
+        parser: "markdown-components",
+        componentCount: components.length
+      }
+    };
+  }
+
+  const components = parsePlainTextToComponents(content);
+  return {
+    components,
+    parserMetadata: {
+      parser: "plain-text-sentences",
+      componentCount: components.length
+    }
+  };
+}
 
 export function createServer(config: AppConfig, pool: pg.Pool | null) {
   const app = express();
@@ -277,7 +299,8 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       return;
     }
 
-    const parsedComponents = parsePlainTextToComponents(parsedRequest.data.content);
+    const parsedFile = parseFileContent(parsedRequest.data.format, parsedRequest.data.content);
+    const parsedComponents = parsedFile.components;
     if (parsedComponents.length === 0) {
       response.status(422).json({
         error: "no_reviewable_components",
@@ -290,7 +313,7 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
     const document = await repositories.documents.createDocument({
       name: parsedRequest.data.name,
       sourceType: "file",
-      originalFormat: "txt",
+      originalFormat: parsedRequest.data.format,
       currentWorkflowItemRef: initialState
     });
     const version = await repositories.documents.createDocumentVersion({
@@ -298,10 +321,7 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       versionNumber: 1,
       sourceSnapshot: parsedRequest.data.content,
       currentSnapshot: parsedRequest.data.content,
-      parserMetadata: {
-        parser: "plain-text-sentences",
-        componentCount: parsedComponents.length
-      }
+      parserMetadata: parsedFile.parserMetadata
     });
     const components = await repositories.documents.createReviewComponents(
       parsedComponents.map((component) => ({
