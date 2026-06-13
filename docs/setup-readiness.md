@@ -51,7 +51,8 @@ Settings is organized as a left section navigator with focused detail panels:
 - AI Tasks: editable task route fields for provider key, registered hook, render slot, order, enabled state, model override, and display metadata.
 - Landing Areas: predefined render slots and current task assignments.
 - Diagnostics: setup/provider readiness plus recent task runs.
-- Ingest: file and URL ingest, still blocked until an active workflow exists.
+
+Ingest is a top-level workspace tab. It supports file selection, file drops, URL drops, URL snapshot entry, and still blocks document creation until an active workflow exists.
 
 The Settings section can save:
 

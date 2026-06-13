@@ -56,9 +56,10 @@ Use manual checks only after the implementation slice has automated coverage:
    - local service starts on `127.0.0.1:4794`
    - UI starts on `http://127.0.0.1:5184`
    - setup readiness shows database, workflow, and provider blockers clearly
-   - Settings shows Workflow, Provider Registry, AI Tasks, Landing Areas, Diagnostics, and Ingest sections
+   - top navigation shows Ingest before Document Review
+   - Settings shows Workflow, Provider Registry, AI Tasks, Landing Areas, and Diagnostics sections
    - predefined landing areas show current task assignments or clear empty assignment state
-   - document import surface blocks clearly when no active workflow exists
+   - document import surface blocks clearly when no active workflow exists and exposes file/URL drop affordances
    - provider-backed buttons are disabled with concrete readiness reasons
    - desktop layout has no horizontal overflow; narrow viewport should be checked when Chrome automation supports resizing or by a manual resize
    - Chrome console has no errors

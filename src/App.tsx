@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { StatusPill } from "./components/StatusPill";
 import workflowFixture from "../docs/workflow/artifact-review-0.1.0-state-workflow-definition.json";
 import {
@@ -59,6 +59,7 @@ const suggestComponentRevisionTaskKey = "suggest-component-revision";
 const inlineAiSuggestSlot = "component.inline.aiSuggest";
 const defaultFileContent =
   "Paste or type text for review. Each sentence becomes a review component. Add enough content to make the workspace useful.";
+const themeStorageKey = "artifact-review-theme";
 
 type PendingKey =
   | "initial"
@@ -86,10 +87,11 @@ type PendingKey =
   | "export"
   | "workflow-action";
 
-type AppPage = "review" | "settings";
-type SettingsSection = "database" | "workflow" | "provider" | "processing-hooks" | "tasks" | "landing" | "diagnostics" | "ingest";
+type AppPage = "ingest" | "review" | "settings";
+type SettingsSection = "database" | "workflow" | "provider" | "processing-hooks" | "tasks" | "landing" | "diagnostics";
 type ReviewViewMode = "normal" | "focus";
 type InlineReviewTab = "text" | "annotations" | "questions" | "evidence" | "ai";
+type ThemeMode = "light" | "dark";
 
 type FileForm = {
   name: string;
@@ -162,6 +164,7 @@ export function App() {
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("database");
   const [reviewViewMode, setReviewViewMode] = useState<ReviewViewMode>("normal");
   const [selectedInlineTab, setSelectedInlineTab] = useState<InlineReviewTab>("text");
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => getInitialThemeMode());
   const [selectedBucketId, setSelectedBucketId] = useState("all");
   const [documentSearch, setDocumentSearch] = useState("");
   const [setupReadiness, setSetupReadiness] = useState<SetupReadiness | null>(null);
@@ -459,6 +462,11 @@ export function App() {
       setSelectedBucketId("all");
     }
   }, [bucketOptions, selectedBucketId]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeMode;
+    document.documentElement.style.colorScheme = themeMode;
+  }, [themeMode]);
 
   useEffect(() => {
     runPending("initial", refreshGlobal).catch((unknownError: unknown) => {
@@ -914,24 +922,48 @@ export function App() {
     });
   }
 
+  function handleToggleTheme() {
+    setThemeMode((current) => {
+      const next = current === "dark" ? "light" : "dark";
+      saveThemeMode(next);
+      return next;
+    });
+  }
+
   const aiSuggestAction =
     inlineAiSuggestActions.find((action) => action.taskKey === suggestComponentRevisionTaskKey) ??
     inlineAiSuggestActions[0] ??
     null;
-  const pageName = activePage === "review" ? "Document Review" : "Settings";
+  const pageName = activePage === "ingest" ? "Ingest" : activePage === "review" ? "Document Review" : "Settings";
+  const pageShellClass =
+    activePage === "review" ? "review-page-shell" : activePage === "ingest" ? "ingest-page-shell" : "settings-page-shell";
 
   return (
-    <div className={`app-shell ${activePage === "review" ? "review-page-shell" : "settings-page-shell"} ${reviewViewMode === "focus" ? "focus-mode" : ""}`}>
+    <div className={`app-shell ${pageShellClass} ${reviewViewMode === "focus" ? "focus-mode" : ""}`}>
       <header className="primary-nav">
         <div className="primary-nav-left">
           <div className="brand-block">
             <span className="brand">Artifact Review</span>
             <span className="version">v0.1.0</span>
-            <button className="icon-button" aria-label="Toggle theme" title="Toggle theme">
-              ◐
+            <button
+              className="icon-button theme-toggle"
+              type="button"
+              aria-label={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              aria-pressed={themeMode === "dark"}
+              title={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              onClick={handleToggleTheme}
+            >
+              {themeMode === "dark" ? "☀" : "☾"}
             </button>
           </div>
           <nav className="nav-tabs" aria-label="Primary">
+            <button
+              className={activePage === "ingest" ? "nav-tab active" : "nav-tab"}
+              type="button"
+              onClick={() => setActivePage("ingest")}
+            >
+              Ingest
+            </button>
             <button
               className={activePage === "review" ? "nav-tab active" : "nav-tab"}
               type="button"
@@ -971,7 +1003,21 @@ export function App() {
         <StatusMessage error={error} notice={notice} lastAutosave={lastAutosave} />
       </div>
 
-      {activePage === "review" ? (
+      {activePage === "ingest" ? (
+        <IngestWorkspace
+          fileForm={fileForm}
+          ingestBlocked={ingestBlocked}
+          isPending={isPending}
+          onChangeFileForm={setFileForm}
+          onChangeUrlForm={setUrlForm}
+          onFileIngest={handleFileIngest}
+          onSelectedFile={handleSelectedFile}
+          onUrlIngest={handleUrlIngest}
+          reportActionError={reportActionError}
+          urlForm={urlForm}
+          onOpenSettings={() => setActivePage("settings")}
+        />
+      ) : activePage === "review" ? (
         <>
           <aside className="review-sidebar">
             <section className="review-process" aria-label="Review process">
@@ -1027,9 +1073,9 @@ export function App() {
             {!workflowStatus?.active ? (
               <section className="compact-blocker">
                 <strong>Workflow is inactive.</strong>
-                <span>Review can continue for existing documents, but ingest is handled from Settings after activation.</span>
-                <button className="btn btn-secondary" type="button" onClick={() => setActivePage("settings")}>
-                  Open Settings
+                <span>Review can continue for existing documents. Ingest unlocks after workflow activation.</span>
+                <button className="btn btn-secondary" type="button" onClick={() => setActivePage("ingest")}>
+                  Open Ingest
                 </button>
               </section>
             ) : null}
@@ -1287,27 +1333,20 @@ export function App() {
         <SettingsWorkspace
           databaseSettings={settingsSummary?.database ?? null}
           databaseSettingsForm={databaseSettingsForm}
-          fileForm={fileForm}
-          ingestBlocked={ingestBlocked}
           isPending={isPending}
           onActivateWorkflow={handleActivateWorkflow}
           onChangeDatabaseSettingsForm={setDatabaseSettingsForm}
-          onChangeFileForm={setFileForm}
           onChangeNewProcessingHookKey={setNewProcessingHookKey}
           onChangeProviderSettingsForm={setProviderSettingsForm}
           onChangeSection={setSettingsSection}
           onChangeTaskRouteDrafts={setTaskRouteDrafts}
-          onChangeUrlForm={setUrlForm}
-          onFileIngest={handleFileIngest}
           onProviderRefresh={handleRefreshProviders}
           onCreateProcessingHook={handleCreateProcessingHook}
           onDeleteProcessingHook={handleDeleteProcessingHook}
           onSaveDatabaseSettings={handleSaveDatabaseSettings}
           onSaveProviderSettings={handleSaveProviderSettings}
           onSaveTaskRoute={handleSaveTaskRoute}
-          onSelectedFile={handleSelectedFile}
           onSelectedWorkflowFile={handleSelectedWorkflowFile}
-          onUrlIngest={handleUrlIngest}
           onUseBundledWorkflow={handleUseBundledWorkflow}
           onValidateWorkflow={handleValidateWorkflow}
           providerReadiness={providerReadiness}
@@ -1320,7 +1359,6 @@ export function App() {
           settingsSummary={settingsSummary}
           setupReadiness={setupReadiness}
           taskRouteDrafts={taskRouteDrafts}
-          urlForm={urlForm}
           workflowStatus={workflowStatus}
           workflowDefinitionSelection={workflowDefinitionSelection}
           workflowValidation={workflowValidation}
@@ -1330,31 +1368,228 @@ export function App() {
   );
 }
 
+function IngestWorkspace({
+  fileForm,
+  ingestBlocked,
+  isPending,
+  onChangeFileForm,
+  onChangeUrlForm,
+  onFileIngest,
+  onOpenSettings,
+  onSelectedFile,
+  onUrlIngest,
+  reportActionError,
+  urlForm
+}: {
+  fileForm: FileForm;
+  ingestBlocked: boolean;
+  isPending: (key: PendingKey) => boolean;
+  onChangeFileForm: Dispatch<SetStateAction<FileForm>>;
+  onChangeUrlForm: Dispatch<SetStateAction<UrlForm>>;
+  onFileIngest: () => Promise<void>;
+  onOpenSettings: () => void;
+  onSelectedFile: (file: File | null) => Promise<void>;
+  onUrlIngest: () => Promise<void>;
+  reportActionError: (action: () => Promise<unknown>) => void;
+  urlForm: UrlForm;
+}) {
+  const [dragActive, setDragActive] = useState(false);
+
+  function handleDragEnter(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    if (!ingestBlocked) {
+      setDragActive(true);
+    }
+  }
+
+  function handleDragOver(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      return;
+    }
+    setDragActive(false);
+  }
+
+  function handleDrop(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    setDragActive(false);
+    if (ingestBlocked) {
+      return;
+    }
+
+    const droppedFile = event.dataTransfer.files.item(0);
+    if (droppedFile) {
+      reportActionError(() => onSelectedFile(droppedFile));
+      return;
+    }
+
+    const droppedUrl = extractDroppedUrl(event.dataTransfer);
+    if (droppedUrl) {
+      onChangeUrlForm((current) => ({ ...current, url: droppedUrl }));
+    }
+  }
+
+  function handleFileNameChange(name: string) {
+    onChangeFileForm((current) => ({
+      ...current,
+      name,
+      format: formatFromFileName(name)
+    }));
+  }
+
+  return (
+    <main className="ingest-workspace">
+      <section className="settings-panel ingest-panel" aria-disabled={ingestBlocked}>
+        <div className="panel-heading">
+          <div>
+            <h2>Ingest</h2>
+            <p>{ingestBlocked ? "Activate the workflow before ingesting." : "Create documents from files or URL snapshots."}</p>
+          </div>
+          <div className="setup-actions">
+            {ingestBlocked ? (
+              <StatusPill
+                item={{
+                  key: "ingest-blocked",
+                  label: "Ingest",
+                  ready: false,
+                  reason: "No active workflow."
+                }}
+              />
+            ) : null}
+            <button className="btn btn-secondary" type="button" onClick={onOpenSettings}>
+              Workflow Settings
+            </button>
+          </div>
+        </div>
+
+        <section
+          className={dragActive ? "ingest-drop-zone active" : "ingest-drop-zone"}
+          aria-disabled={ingestBlocked}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
+          <div className="drop-zone-icon" aria-hidden="true"></div>
+          <div>
+            <strong>Drop a document or URL here</strong>
+            <p>Supports txt, md, html, htm, and URL text drops.</p>
+          </div>
+        </section>
+
+        <div className="ingest-grid">
+          <form
+            className="ingest-form file-ingest-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              reportActionError(onFileIngest);
+            }}
+          >
+            <div className="file-picker-row">
+              <label className="icon-file-picker" aria-disabled={ingestBlocked || isPending("file-read")}>
+                <span className="file-picker-glyph" aria-hidden="true"></span>
+                <span>{isPending("file-read") ? "Opening" : "Choose File"}</span>
+                <input
+                  accept=".txt,.md,.html,.htm,text/plain,text/markdown,text/html"
+                  disabled={ingestBlocked || isPending("file-read")}
+                  type="file"
+                  onChange={(event) => reportActionError(() => onSelectedFile(event.currentTarget.files?.[0] ?? null))}
+                />
+              </label>
+              <div className="detected-format" aria-label="Detected file format">
+                <span>Detected format</span>
+                <strong>{fileForm.format}</strong>
+              </div>
+            </div>
+            <label className="full-span">
+              File name
+              <input
+                disabled={ingestBlocked}
+                value={fileForm.name}
+                onChange={(event) => handleFileNameChange(event.target.value)}
+              />
+            </label>
+            <label className="full-span">
+              Content
+              <textarea
+                disabled={ingestBlocked}
+                rows={7}
+                value={fileForm.content}
+                onChange={(event) => onChangeFileForm((current) => ({ ...current, content: event.target.value }))}
+              />
+            </label>
+            <button className="btn btn-primary" disabled={ingestBlocked || isPending("file-ingest")} type="submit">
+              {isPending("file-ingest") ? "Ingesting" : "Ingest File"}
+            </button>
+          </form>
+
+          <form
+            className="ingest-form url-ingest-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              reportActionError(onUrlIngest);
+            }}
+          >
+            <label className="full-span">
+              URL
+              <input
+                disabled={ingestBlocked}
+                placeholder="https://example.com"
+                value={urlForm.url}
+                onChange={(event) => onChangeUrlForm((current) => ({ ...current, url: event.target.value }))}
+              />
+            </label>
+            <label className="full-span">
+              Name
+              <input
+                disabled={ingestBlocked}
+                placeholder="Optional"
+                value={urlForm.name}
+                onChange={(event) => onChangeUrlForm((current) => ({ ...current, name: event.target.value }))}
+              />
+            </label>
+            <label className="full-span">
+              Snapshot HTML
+              <textarea
+                disabled={ingestBlocked}
+                rows={7}
+                placeholder="Optional captured HTML. Leave blank to fetch the URL."
+                value={urlForm.snapshotHtml}
+                onChange={(event) => onChangeUrlForm((current) => ({ ...current, snapshotHtml: event.target.value }))}
+              />
+            </label>
+            <button className="btn btn-primary" disabled={ingestBlocked || !urlForm.url.trim() || isPending("url-ingest")} type="submit">
+              {isPending("url-ingest") ? "Ingesting" : "Ingest URL"}
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function SettingsWorkspace({
   databaseSettings,
   databaseSettingsForm,
-  fileForm,
-  ingestBlocked,
   isPending,
   newProcessingHookKey,
   onActivateWorkflow,
   onChangeDatabaseSettingsForm,
-  onChangeFileForm,
   onChangeNewProcessingHookKey,
   onChangeProviderSettingsForm,
   onChangeSection,
   onChangeTaskRouteDrafts,
-  onChangeUrlForm,
-  onFileIngest,
   onCreateProcessingHook,
   onDeleteProcessingHook,
   onProviderRefresh,
   onSaveDatabaseSettings,
   onSaveProviderSettings,
   onSaveTaskRoute,
-  onSelectedFile,
   onSelectedWorkflowFile,
-  onUrlIngest,
   onUseBundledWorkflow,
   onValidateWorkflow,
   providerReadiness,
@@ -1366,35 +1601,27 @@ function SettingsWorkspace({
   settingsSummary,
   setupReadiness,
   taskRouteDrafts,
-  urlForm,
   workflowStatus,
   workflowDefinitionSelection,
   workflowValidation
 }: {
   databaseSettings: DatabaseSettings | null;
   databaseSettingsForm: DatabaseSettingsForm;
-  fileForm: FileForm;
-  ingestBlocked: boolean;
   isPending: (key: PendingKey) => boolean;
   newProcessingHookKey: string;
   onActivateWorkflow: () => Promise<void>;
   onChangeDatabaseSettingsForm: Dispatch<SetStateAction<DatabaseSettingsForm>>;
-  onChangeFileForm: Dispatch<SetStateAction<FileForm>>;
   onChangeNewProcessingHookKey: Dispatch<SetStateAction<string>>;
   onChangeProviderSettingsForm: Dispatch<SetStateAction<ProviderSettingsForm>>;
   onChangeSection: (section: SettingsSection) => void;
   onChangeTaskRouteDrafts: Dispatch<SetStateAction<Record<string, TaskRouteDraft>>>;
-  onChangeUrlForm: Dispatch<SetStateAction<UrlForm>>;
-  onFileIngest: () => Promise<void>;
   onCreateProcessingHook: () => Promise<void>;
   onDeleteProcessingHook: (hook: ProcessingHookSummary) => Promise<void>;
   onProviderRefresh: () => Promise<void>;
   onSaveDatabaseSettings: () => Promise<void>;
   onSaveProviderSettings: () => Promise<void>;
   onSaveTaskRoute: (taskKey: string) => Promise<void>;
-  onSelectedFile: (file: File | null) => Promise<void>;
   onSelectedWorkflowFile: (file: File | null) => Promise<void>;
-  onUrlIngest: () => Promise<void>;
   onUseBundledWorkflow: () => Promise<void>;
   onValidateWorkflow: () => Promise<void>;
   providerReadiness: ProviderReadiness | null;
@@ -1406,7 +1633,6 @@ function SettingsWorkspace({
   settingsSummary: SettingsSummary | null;
   setupReadiness: SetupReadiness | null;
   taskRouteDrafts: Record<string, TaskRouteDraft>;
-  urlForm: UrlForm;
   workflowStatus: WorkflowStatus | null;
   workflowDefinitionSelection: WorkflowDefinitionSelection;
   workflowValidation: WorkflowValidationResult | null;
@@ -1418,8 +1644,7 @@ function SettingsWorkspace({
     { id: "processing-hooks", label: "Processing Hooks", status: `${settingsSummary?.processingHooks.length ?? 0}` },
     { id: "tasks", label: "AI Tasks", status: `${settingsSummary?.taskRoutes.length ?? 0}` },
     { id: "landing", label: "Landing Areas", status: `${settingsSummary?.renderSlots.length ?? 0}` },
-    { id: "diagnostics", label: "Diagnostics", status: providerReadiness?.ready ? "Ready" : "Check" },
-    { id: "ingest", label: "Ingest", status: ingestBlocked ? "Blocked" : "Ready" }
+    { id: "diagnostics", label: "Diagnostics", status: providerReadiness?.ready ? "Ready" : "Check" }
   ];
 
   return (
@@ -1905,123 +2130,6 @@ function SettingsWorkspace({
           </div>
         ) : null}
 
-        {section === "ingest" ? (
-          <div className="settings-panel ingest-panel" aria-disabled={ingestBlocked}>
-            <div className="panel-heading">
-              <div>
-                <h2>Ingest</h2>
-                <p>{ingestBlocked ? "Activate the workflow before ingesting." : "Create documents from file text or URL snapshots."}</p>
-              </div>
-              {ingestBlocked ? (
-                <StatusPill
-                  item={{
-                    key: "ingest-blocked",
-                    label: "Ingest",
-                    ready: false,
-                    reason: "No active workflow."
-                  }}
-                />
-              ) : null}
-            </div>
-            <div className="ingest-grid">
-              <form
-                className="ingest-form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  reportActionError(onFileIngest);
-                }}
-              >
-                <label>
-                  Select file
-                  <input
-                    accept=".txt,.md,.html,.htm,text/plain,text/markdown,text/html"
-                    disabled={ingestBlocked || isPending("file-read")}
-                    type="file"
-                    onChange={(event) => reportActionError(() => onSelectedFile(event.currentTarget.files?.[0] ?? null))}
-                  />
-                </label>
-                <label>
-                  Name
-                  <input
-                    disabled={ingestBlocked}
-                    value={fileForm.name}
-                    onChange={(event) => onChangeFileForm((current) => ({ ...current, name: event.target.value }))}
-                  />
-                </label>
-                <label>
-                  Format
-                  <select
-                    disabled={ingestBlocked}
-                    value={fileForm.format}
-                    onChange={(event) =>
-                      onChangeFileForm((current) => ({
-                        ...current,
-                        format: event.target.value as FileForm["format"]
-                      }))
-                    }
-                  >
-                    <option value="txt">txt</option>
-                    <option value="md">md</option>
-                    <option value="html">html</option>
-                    <option value="htm">htm</option>
-                  </select>
-                </label>
-                <label className="full-span">
-                  Content
-                  <textarea
-                    disabled={ingestBlocked}
-                    rows={6}
-                    value={fileForm.content}
-                    onChange={(event) => onChangeFileForm((current) => ({ ...current, content: event.target.value }))}
-                  />
-                </label>
-                <button className="btn btn-primary" disabled={ingestBlocked || isPending("file-ingest")} type="submit">
-                  {isPending("file-ingest") ? "Ingesting" : "Ingest File"}
-                </button>
-              </form>
-
-              <form
-                className="ingest-form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  reportActionError(onUrlIngest);
-                }}
-              >
-                <label>
-                  URL
-                  <input
-                    disabled={ingestBlocked}
-                    placeholder="https://example.com"
-                    value={urlForm.url}
-                    onChange={(event) => onChangeUrlForm((current) => ({ ...current, url: event.target.value }))}
-                  />
-                </label>
-                <label>
-                  Name
-                  <input
-                    disabled={ingestBlocked}
-                    placeholder="Optional"
-                    value={urlForm.name}
-                    onChange={(event) => onChangeUrlForm((current) => ({ ...current, name: event.target.value }))}
-                  />
-                </label>
-                <label className="full-span">
-                  Snapshot HTML
-                  <textarea
-                    disabled={ingestBlocked}
-                    rows={6}
-                    placeholder="Optional captured HTML. Leave blank to fetch the URL."
-                    value={urlForm.snapshotHtml}
-                    onChange={(event) => onChangeUrlForm((current) => ({ ...current, snapshotHtml: event.target.value }))}
-                  />
-                </label>
-                <button className="btn btn-primary" disabled={ingestBlocked || !urlForm.url.trim() || isPending("url-ingest")} type="submit">
-                  {isPending("url-ingest") ? "Ingesting" : "Ingest URL"}
-                </button>
-              </form>
-            </div>
-          </div>
-        ) : null}
       </section>
     </main>
   );
@@ -2466,6 +2574,50 @@ function formatFromFileName(fileName: string): FileForm["format"] {
     return extension;
   }
   return "txt";
+}
+
+function extractDroppedUrl(dataTransfer: DataTransfer): string | null {
+  const uriListEntry = dataTransfer
+    .getData("text/uri-list")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line && !line.startsWith("#"));
+  const candidate = uriListEntry || dataTransfer.getData("text/plain").trim().split(/\s+/)[0] || "";
+  return isHttpUrl(candidate) ? candidate : null;
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function getInitialThemeMode(): ThemeMode {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+
+  try {
+    const storedTheme = window.localStorage.getItem(themeStorageKey);
+    if (storedTheme === "light" || storedTheme === "dark") {
+      return storedTheme;
+    }
+  } catch {
+    return "light";
+  }
+
+  return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
+}
+
+function saveThemeMode(themeMode: ThemeMode) {
+  try {
+    window.localStorage.setItem(themeStorageKey, themeMode);
+  } catch {
+    // The visible theme still changes even when browser storage is unavailable.
+  }
 }
 
 function buildExportFileName(document: DocumentSummary): string {

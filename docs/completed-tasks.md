@@ -2,6 +2,18 @@
 
 Append brief entries here when project work is completed. Keep this file concise and append-only.
 
+## 2026-06-14
+
+- Task: Fix light and dark mode switching.
+  Outcome: Replaced the static theme icon with a working light/dark toggle, applied the active theme to the document root, persisted explicit theme choices locally, added dark-mode design tokens, and moved hard-coded UI colors onto theme-aware variables for the app shell, panels, inputs, pills, review content, and ingest controls.
+  Verification: `npm run lint` passed; `npm run verify` passed with 10 test files, 1 skipped Postgres suite, 52 tests passed, and 2 skipped; Vite production build passed. Chrome smoke against `http://127.0.0.1:5185/` confirmed the page switched from dark to light, updated `color-scheme`, changed the toggle label/pressed state, persisted after reload, and was restored to the starting dark mode afterward. The registered `5184` port was unavailable, so the UI smoke used a temporary Vite port without changing project config.
+  Traceability: Git branch `main` at `d80ac8d`; no commit yet; changed React theme state and CSS theme tokens.
+
+- Task: Promote Ingest to top-level navigation and refine ingest controls.
+  Outcome: Added Ingest as the first primary tab before Document Review, moved file/URL ingest out of the Settings section, added a visible drop zone for documents and URL text drops, replaced the browser file input row with an icon-style Choose File control, removed the editable file-extension dropdown, derived format from the file name, and widened the file-name field.
+  Verification: `npm run verify` passed with 10 test files, 1 skipped Postgres suite, 52 tests passed, and 2 skipped; Vite production build passed. Chrome smoke against `http://127.0.0.1:5185/` confirmed the primary tab order, active Ingest page, visible drop zone, icon-style file picker, no ingest format dropdown, no horizontal overflow, and no Chrome console errors. The registered `5184` port was unavailable but not serving responses, so the UI smoke used a temporary Vite port without changing project config.
+  Traceability: Git branch `main` at `d80ac8d`; no commit yet; changed React navigation/Ingest UI, styles, setup/API/verification docs, completed-task ledger, and handoff.
+
 ## 2026-06-13
 
 - Task: Add Memo Capture-style provider registry and processing hook configuration.
