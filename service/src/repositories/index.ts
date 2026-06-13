@@ -11,6 +11,7 @@ export type Repositories = ReturnType<typeof createRepositories>;
 
 export function createRepositories(db: Queryable) {
   return {
+    db,
     aiSuggestions: new AiSuggestionsRepository(db),
     appSettings: new AppSettingsRepository(db),
     documents: new DocumentsRepository(db),

@@ -10,7 +10,7 @@ describe("workflow HTTP endpoints", () => {
     expect(response.body).toMatchObject({
       valid: true,
       workflow: {
-        id: "artifact-review_workflow",
+        id: "document",
         definitionVersion: "0.1.0",
         entryStates: ["ingestion"]
       }
@@ -18,7 +18,7 @@ describe("workflow HTTP endpoints", () => {
   });
 
   it("activates a valid workflow and reports the active status", async () => {
-    const db = createQueuedDatabase([[], [{ value: workflowFixture }]]);
+    const db = createQueuedDatabase([]);
     const app = createTestServer(db);
 
     const activation = await requestApp(app, "POST", "/api/workflow/activate", workflowFixture);
@@ -28,17 +28,16 @@ describe("workflow HTTP endpoints", () => {
     expect(activation.body).toMatchObject({
       active: true,
       initialState: "ingestion",
-      workflow: { id: "artifact-review_workflow" }
+      workflow: { id: "document" }
     });
     expect(status.status).toBe(200);
     expect(status.body).toMatchObject({
       active: true,
-      workflow: { id: "artifact-review_workflow" },
+      workflow: { id: "document" },
       readiness: { ready: true }
     });
-    expect(db.queries[0]?.text).toContain("insert into app_settings");
-    expect(db.queries[0]?.values?.[0]).toBe("activeDocumentWorkflowDefinition");
-    expect(db.queries[1]?.values).toEqual(["activeDocumentWorkflowDefinition"]);
+    expect(db.queries.some((query) => query.text.includes("insert into app_settings"))).toBe(true);
+    expect(db.queries.some((query) => query.values?.[0] === "stateWorkflowRuntime.state")).toBe(true);
   });
 
   it("returns allowed actions for the document current workflow state", async () => {
@@ -55,11 +54,12 @@ describe("workflow HTTP endpoints", () => {
           ingested_at: now,
           updated_at: now
         }
-      ],
-      [{ value: workflowFixture }]
+      ]
     ]);
+    const app = createTestServer(db);
+    await requestApp(app, "POST", "/api/workflow/activate", workflowFixture);
 
-    const response = await requestApp(createTestServer(db), "GET", "/api/workflow/documents/document-1/actions");
+    const response = await requestApp(app, "GET", "/api/workflow/documents/document-1/actions");
 
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({
@@ -86,23 +86,23 @@ describe("workflow HTTP endpoints", () => {
           ingested_at: now,
           updated_at: now
         }
-      ],
-      [{ value: workflowFixture }]
+      ]
     ]);
+    const app = createTestServer(db);
+    await requestApp(app, "POST", "/api/workflow/activate", workflowFixture);
 
     const response = await requestApp(
-      createTestServer(db),
+      app,
       "POST",
       "/api/workflow/documents/document-1/actions/needs_review.to_recent_reviews"
     );
 
     expect(response.status).toBe(409);
-    expect(response.body).toEqual({
+    expect(response.body).toMatchObject({
       error: "workflow_action_not_allowed",
       documentId: "document-1",
       currentState: "ingestion",
       actionId: "needs_review.to_recent_reviews"
     });
-    expect(db.queries).toHaveLength(2);
   });
 });

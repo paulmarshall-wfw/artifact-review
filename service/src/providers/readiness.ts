@@ -5,12 +5,24 @@ import type { ProviderTaskAsset } from "../repositories/providerTasks.js";
 import type { RegistryLookupResult, RegistryProviderConfig } from "./registry.js";
 
 export type ProviderSettings = {
+  registryUrl?: string;
   selectedProviderProfileKey?: string;
+  demoProviderMode?: boolean;
 };
 
 export type SelectedProfileResolution = {
   profileKey: string | undefined;
   source: "saved" | "env" | "none";
+};
+
+export type ProviderRegistryResolution = {
+  registryUrl: string | undefined;
+  source: "saved" | "env" | "none";
+};
+
+export type DemoProviderModeResolution = {
+  enabled: boolean;
+  source: "saved" | "env";
 };
 
 export type ProviderReadinessContext = {
@@ -22,6 +34,28 @@ export type ProviderReadinessContext = {
 
 export function resolveSelectedProfile(config: AppConfig, settings: ProviderSettings): string | undefined {
   return resolveSelectedProfileSelection(config, settings).profileKey;
+}
+
+export function resolveProviderRegistryUrl(config: AppConfig, settings: ProviderSettings): ProviderRegistryResolution {
+  const savedRegistryUrl = settings.registryUrl?.trim();
+  if (savedRegistryUrl) {
+    return { registryUrl: savedRegistryUrl, source: "saved" };
+  }
+
+  const bootstrapRegistryUrl = config.INVOKE_PROVIDERS_REGISTRY_URL?.trim();
+  if (bootstrapRegistryUrl) {
+    return { registryUrl: bootstrapRegistryUrl, source: "env" };
+  }
+
+  return { registryUrl: undefined, source: "none" };
+}
+
+export function resolveDemoProviderMode(config: AppConfig, settings: ProviderSettings): DemoProviderModeResolution {
+  if (typeof settings.demoProviderMode === "boolean") {
+    return { enabled: settings.demoProviderMode, source: "saved" };
+  }
+
+  return { enabled: config.ARTIFACT_REVIEW_DEMO_PROVIDER_MODE, source: "env" };
 }
 
 export function resolveSelectedProfileSelection(
@@ -68,14 +102,16 @@ export function buildProviderReadiness(
   context: ProviderReadinessContext = {}
 ): ReadinessResponse {
   const selection = resolveSelectedProfileSelection(config, settings);
+  const registrySelection = resolveProviderRegistryUrl(config, settings);
+  const demoModeSelection = resolveDemoProviderMode(config, settings);
   const selectedProfile = selection.profileKey;
   const taskAsset = context.taskAsset ?? null;
   const registry = context.registry;
-  const demoMode = config.ARTIFACT_REVIEW_DEMO_PROVIDER_MODE;
+  const demoMode = demoModeSelection.enabled;
   const selectedProvider = selectProviderForTask(registry?.providers ?? [], taskAsset);
   const requiredSecretRef = selectedProvider?.requiredSecretRef;
   const secretAvailable = requiredSecretRef ? Boolean((context.secretEnv ?? process.env)[requiredSecretRef]) : true;
-  const registryConfigured = Boolean(config.INVOKE_PROVIDERS_REGISTRY_URL);
+  const registryConfigured = Boolean(registrySelection.registryUrl);
   const registryChecksBypassed = demoMode && (!registryConfigured || !selectedProfile);
 
   const checks: ReadinessCheck[] = [
@@ -84,7 +120,9 @@ export function buildProviderReadiness(
       label: "Provider registry URL",
       ready: registryConfigured || registryChecksBypassed,
       reason: registryConfigured
-        ? undefined
+        ? registrySelection.source === "saved"
+          ? "Using saved provider registry URL."
+          : undefined
         : demoMode
           ? "Demo mode is enabled; registry URL is not required for deterministic suggestions."
           : "INVOKE_PROVIDERS_REGISTRY_URL is not configured."
@@ -174,7 +212,9 @@ export function buildProviderReadiness(
       key: "demo-provider-mode",
       label: "Deterministic demo mode",
       ready: true,
-      reason: demoMode ? "Enabled for explicit deterministic suggestions." : "Disabled; registry/provider readiness is required."
+      reason: demoMode
+        ? `Enabled for explicit deterministic suggestions${demoModeSelection.source === "saved" ? " from app settings" : ""}.`
+        : "Disabled; registry/provider readiness is required."
     }
   ];
 

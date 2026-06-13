@@ -12,9 +12,9 @@ Copy `.env.example` to `.env` and fill values appropriate for local development.
 | `ARTIFACT_REVIEW_SERVICE_PORT` | service startup | Defaults to registered port `4793`. |
 | `VITE_ARTIFACT_REVIEW_API_BASE` | UI to service calls | Defaults to `http://127.0.0.1:4793`. |
 | `DATABASE_URL` | database-backed work | Configured external/dev Postgres connection string. |
-| `INVOKE_PROVIDERS_REGISTRY_URL` | provider-backed work | Shared provider registry URL. |
+| `INVOKE_PROVIDERS_REGISTRY_URL` | first-run provider bootstrap | Shared provider registry URL. A saved provider registry URL in app settings takes priority. |
 | `INVOKE_PROVIDERS_PROFILE` | first-run provider bootstrap | Used only when no saved selected profile exists. |
-| `ARTIFACT_REVIEW_DEMO_PROVIDER_MODE` | tests or explicit demos | Must be explicitly enabled; default is `false`. |
+| `ARTIFACT_REVIEW_DEMO_PROVIDER_MODE` | tests or explicit demos | Must be explicitly enabled; default is `false`. A saved demo-mode setting takes priority. |
 | `LOG_LEVEL` | diagnostics | `debug`, `info`, `warn`, or `error`. |
 
 ## Readiness Endpoints
@@ -26,6 +26,18 @@ Copy `.env.example` to `.env` and fill values appropriate for local development.
 | `GET /api/setup-readiness` | Combined database, provider, and workflow readiness. |
 | `GET /api/provider-readiness` | Provider registry/profile/task/schema/fallback/demo readiness. |
 | `GET /api/provider-readiness/tasks/:taskKey` | Provider readiness for a task key. |
+| `GET /api/provider-settings` | Effective provider registry URL, selected profile, demo mode, and value sources. |
+| `PUT /api/provider-settings` | Saves non-secret provider runtime settings in app settings. |
+
+## In-App Provider Settings
+
+The Providers panel can save:
+
+- provider registry URL
+- selected provider profile key
+- explicit deterministic demo mode
+
+These settings are stored in `app_settings` and take precedence over first-run environment values. Clearing a text field removes the saved value and allows the corresponding environment bootstrap value to apply again. Raw provider secrets remain outside Postgres and are only checked through local secret references.
 
 ## Expected First-Run Blockers
 

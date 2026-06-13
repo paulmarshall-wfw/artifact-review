@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import workflowFixture from "../docs/workflow/artifact-review-0.1.0-state-workflow-definition.json";
-import { createQueuedDatabase, createTestServer, requestApp } from "./helpers/http";
+import { createQueuedDatabase, createTestServer, requestApp, type QueuedQuery } from "./helpers/http";
+
+function queryValues(queries: QueuedQuery[], textIncludes: string, index = 0) {
+  return queries.filter((query) => query.text.includes(textIncludes))[index]?.values;
+}
 
 describe("file ingest HTTP endpoint", () => {
   afterEach(() => {
@@ -26,7 +30,6 @@ describe("file ingest HTTP endpoint", () => {
   it("creates a document, first version, components, and initial workflow state for txt files", async () => {
     const now = new Date("2026-06-12T00:00:00.000Z");
     const db = createQueuedDatabase([
-      [{ value: workflowFixture }],
       [
         {
           id: "document-1",
@@ -78,7 +81,9 @@ describe("file ingest HTTP endpoint", () => {
       ]
     ]);
 
-    const response = await requestApp(createTestServer(db), "POST", "/api/ingest/file", {
+    const app = createTestServer(db);
+    await requestApp(app, "POST", "/api/workflow/activate", workflowFixture);
+    const response = await requestApp(app, "POST", "/api/ingest/file", {
       name: "Draft.txt",
       format: "txt",
       content: "First sentence. Second one."
@@ -117,7 +122,7 @@ describe("file ingest HTTP endpoint", () => {
         actions: []
       }
     });
-    expect(db.queries[1]?.values).toEqual([
+    expect(queryValues(db.queries, "insert into documents")).toEqual([
       expect.any(String),
       null,
       "Draft.txt",
@@ -125,7 +130,7 @@ describe("file ingest HTTP endpoint", () => {
       "txt",
       "ingestion"
     ]);
-    expect(db.queries[2]?.values).toEqual([
+    expect(queryValues(db.queries, "insert into document_versions")).toEqual([
       expect.any(String),
       "document-1",
       1,
@@ -133,13 +138,13 @@ describe("file ingest HTTP endpoint", () => {
       "First sentence. Second one.",
       { parser: "plain-text-sentences", componentCount: 2 }
     ]);
-    expect(db.queries[3]?.values?.slice(3, 7)).toEqual([
+    expect(queryValues(db.queries, "insert into review_components")?.slice(3, 7)).toEqual([
       "root",
       { start: 0, end: 15 },
       "First sentence.",
       expect.any(String)
     ]);
-    expect(db.queries[4]?.values?.slice(3, 7)).toEqual([
+    expect(queryValues(db.queries, "insert into review_components", 1)?.slice(3, 7)).toEqual([
       "root",
       { start: 16, end: 27 },
       "Second one.",
@@ -151,7 +156,6 @@ describe("file ingest HTTP endpoint", () => {
     const now = new Date("2026-06-12T00:00:00.000Z");
     const source = "# Title\n\nIntro sentence. More detail.\n- First point\n- Second point\n";
     const db = createQueuedDatabase([
-      [{ value: workflowFixture }],
       [
         {
           id: "document-md-1",
@@ -242,7 +246,9 @@ describe("file ingest HTTP endpoint", () => {
       ]
     ]);
 
-    const response = await requestApp(createTestServer(db), "POST", "/api/ingest/file", {
+    const app = createTestServer(db);
+    await requestApp(app, "POST", "/api/workflow/activate", workflowFixture);
+    const response = await requestApp(app, "POST", "/api/ingest/file", {
       name: "Draft.md",
       format: "md",
       content: source
@@ -274,7 +280,7 @@ describe("file ingest HTTP endpoint", () => {
         actions: []
       }
     });
-    expect(db.queries[1]?.values).toEqual([
+    expect(queryValues(db.queries, "insert into documents")).toEqual([
       expect.any(String),
       null,
       "Draft.md",
@@ -282,7 +288,7 @@ describe("file ingest HTTP endpoint", () => {
       "md",
       "ingestion"
     ]);
-    expect(db.queries[2]?.values).toEqual([
+    expect(queryValues(db.queries, "insert into document_versions")).toEqual([
       expect.any(String),
       "document-md-1",
       1,
@@ -290,22 +296,22 @@ describe("file ingest HTTP endpoint", () => {
       source,
       { parser: "markdown-components", componentCount: 5 }
     ]);
-    const sectionId = db.queries[3]?.values?.[3];
-    expect(db.queries[3]?.values?.slice(2, 7)).toEqual([
+    const sectionId = queryValues(db.queries, "insert into review_components")?.[3];
+    expect(queryValues(db.queries, "insert into review_components")?.slice(2, 7)).toEqual([
       "markdown_heading",
       sectionId,
       { start: 2, end: 7 },
       "Title",
       expect.any(String)
     ]);
-    expect(db.queries[4]?.values?.slice(2, 7)).toEqual([
+    expect(queryValues(db.queries, "insert into review_components", 1)?.slice(2, 7)).toEqual([
       "paragraph_sentence",
       sectionId,
       { start: 9, end: 24 },
       "Intro sentence.",
       expect.any(String)
     ]);
-    expect(db.queries[6]?.values?.slice(2, 7)).toEqual([
+    expect(queryValues(db.queries, "insert into review_components", 3)?.slice(2, 7)).toEqual([
       "markdown_bullet",
       sectionId,
       { start: 40, end: 51 },
@@ -319,7 +325,6 @@ describe("file ingest HTTP endpoint", () => {
     const source =
       "<h1>Review Plan</h1><p>First sentence. Second sentence.</p><ul><li>Check facts</li></ul><table><tbody><tr><td>Clause A</td><td>Ready.</td></tr></tbody></table>";
     const db = createQueuedDatabase([
-      [{ value: workflowFixture }],
       [
         {
           id: "document-html-1",
@@ -397,7 +402,9 @@ describe("file ingest HTTP endpoint", () => {
       ]
     ]);
 
-    const response = await requestApp(createTestServer(db), "POST", "/api/ingest/file", {
+    const app = createTestServer(db);
+    await requestApp(app, "POST", "/api/workflow/activate", workflowFixture);
+    const response = await requestApp(app, "POST", "/api/ingest/file", {
       name: "Review.htm",
       format: "htm",
       content: source
@@ -428,7 +435,7 @@ describe("file ingest HTTP endpoint", () => {
         actions: []
       }
     });
-    expect(db.queries[1]?.values).toEqual([
+    expect(queryValues(db.queries, "insert into documents")).toEqual([
       expect.any(String),
       null,
       "Review.htm",
@@ -436,7 +443,7 @@ describe("file ingest HTTP endpoint", () => {
       "htm",
       "ingestion"
     ]);
-    expect(db.queries[2]?.values).toEqual([
+    expect(queryValues(db.queries, "insert into document_versions")).toEqual([
       expect.any(String),
       "document-html-1",
       1,
@@ -444,23 +451,23 @@ describe("file ingest HTTP endpoint", () => {
       source,
       { parser: "html-components", componentCount: 4 }
     ]);
-    const sectionId = db.queries[3]?.values?.[3];
+    const sectionId = queryValues(db.queries, "insert into review_components")?.[3];
     expect(sectionId).not.toBe("root");
-    expect(db.queries[3]?.values?.slice(2, 7)).toEqual([
+    expect(queryValues(db.queries, "insert into review_components")?.slice(2, 7)).toEqual([
       "paragraph_sentence",
       sectionId,
       { start: source.indexOf("First"), end: source.indexOf("sentence.") + "sentence.".length },
       "First sentence.",
       expect.any(String)
     ]);
-    expect(db.queries[5]?.values?.slice(2, 7)).toEqual([
+    expect(queryValues(db.queries, "insert into review_components", 2)?.slice(2, 7)).toEqual([
       "html_list_item",
       sectionId,
       { start: source.indexOf("Check"), end: source.indexOf("facts") + "facts".length },
       "Check facts",
       expect.any(String)
     ]);
-    expect(db.queries[6]?.values?.slice(2, 7)).toEqual([
+    expect(queryValues(db.queries, "insert into review_components", 3)?.slice(2, 7)).toEqual([
       "table_row",
       sectionId,
       { start: source.indexOf("Clause A"), end: source.indexOf("Ready.") + "Ready.".length },
@@ -494,7 +501,6 @@ describe("URL ingest HTTP endpoint", () => {
     const now = new Date("2026-06-12T00:00:00.000Z");
     const source = "<h1>Snapshot</h1><p>First URL sentence.</p><ul><li>Check link</li></ul>";
     const db = createQueuedDatabase([
-      [{ value: workflowFixture }],
       [
         {
           id: "document-url-1",
@@ -551,7 +557,9 @@ describe("URL ingest HTTP endpoint", () => {
       ]
     ]);
 
-    const response = await requestApp(createTestServer(db), "POST", "/api/ingest/url", {
+    const app = createTestServer(db);
+    await requestApp(app, "POST", "/api/workflow/activate", workflowFixture);
+    const response = await requestApp(app, "POST", "/api/ingest/url", {
       url: "https://example.test/review",
       name: "Example Review",
       snapshotHtml: source
@@ -590,7 +598,7 @@ describe("URL ingest HTTP endpoint", () => {
         actions: []
       }
     });
-    expect(db.queries[1]?.values).toEqual([
+    expect(queryValues(db.queries, "insert into documents")).toEqual([
       expect.any(String),
       null,
       "Example Review",
@@ -598,7 +606,7 @@ describe("URL ingest HTTP endpoint", () => {
       "url_snapshot",
       "ingestion"
     ]);
-    expect(db.queries[2]?.values).toEqual([
+    expect(queryValues(db.queries, "insert into document_versions")).toEqual([
       expect.any(String),
       "document-url-1",
       1,
@@ -622,7 +630,6 @@ describe("URL ingest HTTP endpoint", () => {
     }));
     vi.stubGlobal("fetch", fetchMock);
     const db = createQueuedDatabase([
-      [{ value: workflowFixture }],
       [
         {
           id: "document-fetched-url-1",
@@ -669,13 +676,15 @@ describe("URL ingest HTTP endpoint", () => {
       ]
     ]);
 
-    const response = await requestApp(createTestServer(db), "POST", "/api/ingest/url", {
+    const app = createTestServer(db);
+    await requestApp(app, "POST", "/api/workflow/activate", workflowFixture);
+    const response = await requestApp(app, "POST", "/api/ingest/url", {
       url: "https://example.test/fetched"
     });
 
     expect(response.status).toBe(201);
     expect(fetchMock).toHaveBeenCalledWith("https://example.test/fetched", expect.objectContaining({ redirect: "follow" }));
-    expect(db.queries[2]?.values).toEqual([
+    expect(queryValues(db.queries, "insert into document_versions")).toEqual([
       expect.any(String),
       "document-fetched-url-1",
       1,

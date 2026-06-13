@@ -15,6 +15,33 @@ export type ReadinessResponse = {
 export type SetupReadiness = ReadinessResponse;
 export type ProviderReadiness = ReadinessResponse;
 
+export type ProviderSettings = {
+  registryUrl: string;
+  selectedProviderProfileKey: string;
+  demoProviderMode: boolean;
+  sources: {
+    registryUrl: "saved" | "env" | "none";
+    selectedProviderProfileKey: "saved" | "env" | "none";
+    demoProviderMode: "saved" | "env";
+  };
+  saved: {
+    registryUrl: string | null;
+    selectedProviderProfileKey: string | null;
+    demoProviderMode: boolean | null;
+  };
+};
+
+export type ProviderSettingsSaveRequest = {
+  registryUrl: string | null;
+  selectedProviderProfileKey: string | null;
+  demoProviderMode: boolean;
+};
+
+export type ProviderSettingsSaveResponse = {
+  settings: ProviderSettings;
+  readiness: ProviderReadiness;
+};
+
 export type WorkflowState = {
   id: string;
   visible: boolean;
@@ -353,6 +380,17 @@ export async function getSetupReadiness(): Promise<SetupReadiness> {
 
 export async function getProviderReadiness(): Promise<ProviderReadiness> {
   return requestJson<ProviderReadiness>("/api/provider-readiness");
+}
+
+export async function getProviderSettings(): Promise<ProviderSettings> {
+  return requestJson<ProviderSettings>("/api/provider-settings");
+}
+
+export async function saveProviderSettings(payload: ProviderSettingsSaveRequest): Promise<ProviderSettingsSaveResponse> {
+  return requestJson<ProviderSettingsSaveResponse>("/api/provider-settings", {
+    method: "PUT",
+    ...jsonBody(payload)
+  });
 }
 
 export async function getProviderReadinessForTask(taskKey: string): Promise<ProviderReadiness & { taskKey: string }> {

@@ -11,6 +11,8 @@ Artifact Review uses a local TypeScript service as the only HTTP API boundary fo
 | `GET` | `/api/setup-readiness` | Combines database, provider, and workflow readiness checks. |
 | `GET` | `/api/provider-readiness` | Reports registry/profile/task/schema/fallback/demo readiness. |
 | `GET` | `/api/provider-readiness/tasks/:taskKey` | Reports provider readiness in the context of a task key. |
+| `GET` | `/api/provider-settings` | Returns effective provider runtime settings and whether each value came from saved app settings, environment bootstrap, or neither. |
+| `PUT` | `/api/provider-settings` | Saves non-secret provider runtime settings: registry URL, selected profile key, and explicit deterministic demo mode. Requires `DATABASE_URL`. |
 | `GET` | `/api/workflow/status` | Returns active document workflow status, active workflow summary, and workflow readiness. |
 | `POST` | `/api/workflow/definitions/validate` | Validates a user-provided document workflow definition without activating it. |
 | `POST` | `/api/workflow/activate` | Validates and stores a user-provided active document workflow when `DATABASE_URL` is configured. |
@@ -50,8 +52,10 @@ These routes are reserved by the MVP plan and should be implemented incrementall
 - Missing records should use `404` with the missing resource ID when safe.
 - Provider output must never directly mutate document text. Provider invocation creates proposed suggestions only.
 - Provider readiness checks the selected profile, registry profile/provider lookup, task definition, prompt version, structured output schema, processing hook, required provider capability, local secret availability, adapter availability, no-fallback policy, and deterministic demo mode.
+- Provider settings can be configured in the app and are persisted in `app_settings`. Saved provider registry URL, selected provider profile, and demo mode take precedence over first-run environment values.
 - Selected provider profile precedence is saved `selectedProviderProfileKey` first, then first-run `INVOKE_PROVIDERS_PROFILE`; a saved missing profile must block provider-backed actions instead of falling back.
-- Deterministic provider behavior is available only when `ARTIFACT_REVIEW_DEMO_PROVIDER_MODE=true`; real registry provider adapter execution remains blocked until provider runtime adapters are installed.
+- Deterministic provider behavior is available only when explicit demo mode is enabled through saved app settings or `ARTIFACT_REVIEW_DEMO_PROVIDER_MODE=true`; real registry provider adapter execution remains blocked until provider runtime adapters are installed.
+- Provider settings saves accept `{ registryUrl: string | null, selectedProviderProfileKey: string | null, demoProviderMode: boolean }`; raw provider secrets must never be saved through this endpoint.
 - Workflow state must be returned by the service and must not be inferred as durable truth in React.
 - Workflow validation failures return `422` with `valid: false` and stable error strings.
 - Workflow action execution rejects invalid transitions with `409 workflow_action_not_allowed`.

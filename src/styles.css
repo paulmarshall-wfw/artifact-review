@@ -296,6 +296,29 @@ dt {
   grid-column: span 1;
 }
 
+.provider-settings-form {
+  border: 1px solid #e2e7ef;
+  border-radius: 6px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(140px, 0.8fr);
+  gap: 0.55rem;
+  padding: 0.65rem;
+}
+
+.provider-settings-form small {
+  color: #647184;
+  font-size: 0.76rem;
+}
+
+.provider-settings-form .inline-check {
+  align-self: end;
+  min-height: 2.3rem;
+}
+
+.provider-settings-form button {
+  align-self: end;
+}
+
 .readiness-item {
   border: 1px solid #e2e7ef;
   border-radius: 6px;
@@ -623,6 +646,7 @@ dd {
   }
 
   .readiness-grid,
+  .provider-settings-form,
   .workflow-summary dl,
   .ingest-form,
   .review-component,

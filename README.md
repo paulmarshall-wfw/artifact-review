@@ -44,7 +44,7 @@ INVOKE_PROVIDERS_REGISTRY_URL=http://127.0.0.1:5181
 INVOKE_PROVIDERS_PROFILE=<profile-key>
 ```
 
-`INVOKE_PROVIDERS_PROFILE` is first-run bootstrap only. A saved selected provider profile in app settings takes priority.
+The provider registry URL, selected profile, and deterministic demo mode can be configured in the app. Environment values are first-run bootstrap defaults; saved provider settings take priority. Raw provider secrets remain outside Postgres.
 
 ## Commands
 
@@ -92,6 +92,7 @@ The default test suite covers parser stability, provider readiness policy, migra
 - `GET /ready`
 - `GET /api/setup-readiness`
 - `GET /api/provider-readiness`
+- `GET /api/provider-settings`
 - `GET /api/workflow/status`
 - `POST /api/workflow/definitions/validate`
 - `POST /api/workflow/activate`

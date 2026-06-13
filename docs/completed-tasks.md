@@ -4,6 +4,11 @@ Append brief entries here when project work is completed. Keep this file concise
 
 ## 2026-06-13
 
+- Task: Install and wire `state-workflow-runtime`, then make provider runtime settings configurable in-app.
+  Outcome: Added `state-workflow-runtime@2.0.0` as a numbered local file dependency, replaced the document workflow path with a runtime-backed adapter over app settings, kept React rendering service-derived workflow actions, and added in-app provider settings for registry URL, selected profile key, and explicit demo mode without storing raw provider secrets. Provider runtime package approval is still limited to numbered local `invoke-providers-for-tasks` packages before real adapter execution.
+  Verification: `npm run verify` passed with 10 test files, 1 skipped Postgres suite, 41 tests passed, and 2 skipped; Vite production build passed. Chrome smoke against `http://127.0.0.1:5182/` passed for the Providers panel with expected setup blockers and no console errors. `npm run tauri:dev` compiled and launched the macOS app; service health passed outside the sandbox at `http://127.0.0.1:4793/health`. Windows smoke validation remains pending from this macOS workspace.
+  Traceability: Git branch `main` at `63446d3`; no commit yet; changed workflow runtime service code, provider settings service/UI code, tests, package files, API/setup docs, completed-task ledger, and handoff.
+
 - Task: Start desktop and cross-platform validation slice.
   Outcome: Added `src-tauri/icons/icon.png` so Tauri development builds can reach the app command layer, ran the required Chrome smoke before desktop validation, and launched the macOS Tauri shell through `npm run tauri:dev`. Windows smoke validation remains pending because this workspace is macOS-only, and remains required before any distribution work or discussion.
   Verification: `cargo check --offline` passed; Chrome smoke against `http://127.0.0.1:5182/` passed with setup/provider/workflow blockers visible, ingest/export disabled, and no Chrome console errors; `npm run tauri:dev` compiled and launched the macOS `artifact-review` app; `curl -sS http://127.0.0.1:4793/health` passed outside the sandbox while the desktop run was active.

@@ -24,6 +24,7 @@
     "pg": "8.16.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "state-workflow-runtime": "file:../state-workflow-runtime",
     "zod": "3.25.67"
   },
   "devDependencies": {

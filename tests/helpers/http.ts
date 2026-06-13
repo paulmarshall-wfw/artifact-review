@@ -20,20 +20,80 @@ export type TestResponse = {
 
 export function createQueuedDatabase(queuedRows: object[][]): Queryable & { queries: QueuedQuery[] } {
   const queries: QueuedQuery[] = [];
+  const appSettings = new Map<string, unknown>();
+  const documents = new Map<string, Record<string, unknown>>();
 
   return {
     queries,
     async query<T extends object = Record<string, unknown>>(text: string, values?: unknown[]): Promise<QueryResult<T>> {
       queries.push({ text, values });
+      const normalizedText = text.replace(/\s+/g, " ").trim().toLowerCase();
+
+      if (normalizedText.includes("select value from app_settings where key = $1") && typeof values?.[0] === "string") {
+        const stored = appSettings.get(values[0]);
+        return buildQueryResult(stored === undefined ? [] : ([{ value: stored }] as T[]));
+      }
+
+      if (normalizedText.includes("insert into app_settings") && typeof values?.[0] === "string") {
+        const rawValue = values[1];
+        appSettings.set(values[0], typeof rawValue === "string" ? JSON.parse(rawValue) : rawValue);
+        return buildQueryResult([]);
+      }
+
+      if (normalizedText.includes("insert into documents")) {
+        const rows = (queuedRows.shift() ?? []) as T[];
+        for (const row of rows) {
+          if ("id" in row && typeof row.id === "string") {
+            documents.set(row.id, row as Record<string, unknown>);
+          }
+        }
+        return buildQueryResult(rows);
+      }
+
+      if (normalizedText.includes("update documents") && typeof values?.[0] === "string") {
+        const existing = documents.get(values[0]);
+        if (existing) {
+          const updated = {
+            ...existing,
+            current_workflow_item_ref: values[1],
+            updated_at: existing.updated_at ?? new Date()
+          } as T;
+          documents.set(values[0], updated as Record<string, unknown>);
+          return buildQueryResult([updated]);
+        }
+      }
+
+      if (
+        normalizedText.includes("from documents") &&
+        normalizedText.includes("where id = $1") &&
+        typeof values?.[0] === "string"
+      ) {
+        const existing = documents.get(values[0]);
+        if (existing) {
+          return buildQueryResult([existing as T]);
+        }
+        const rows = (queuedRows.shift() ?? []) as T[];
+        for (const row of rows) {
+          if ("id" in row && typeof row.id === "string") {
+            documents.set(row.id, row as Record<string, unknown>);
+          }
+        }
+        return buildQueryResult(rows);
+      }
+
       const rows = (queuedRows.shift() ?? []) as T[];
-      return {
-        command: "SELECT",
-        rowCount: rows.length,
-        oid: 0,
-        fields: [],
-        rows
-      };
+      return buildQueryResult(rows);
     }
+  };
+}
+
+function buildQueryResult<T extends object>(rows: T[]): QueryResult<T> {
+  return {
+    command: "SELECT",
+    rowCount: rows.length,
+    oid: 0,
+    fields: [],
+    rows
   };
 }
 

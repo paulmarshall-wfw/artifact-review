@@ -1,5 +1,3 @@
-import type { AppConfig } from "../config/env.js";
-
 export type RegistryProfile = {
   profileKey: string;
   displayName?: string;
@@ -28,11 +26,11 @@ export type RegistryLookupResult = {
 };
 
 export async function fetchRegistryLookup(
-  config: AppConfig,
+  configuredRegistryUrl: string | undefined,
   profileKey: string | undefined,
   fetchImpl: typeof fetch = fetch
 ): Promise<RegistryLookupResult> {
-  const registryUrl = config.INVOKE_PROVIDERS_REGISTRY_URL?.replace(/\/$/, "");
+  const registryUrl = configuredRegistryUrl?.replace(/\/$/, "");
   if (!registryUrl || !profileKey) {
     return {
       configured: Boolean(registryUrl && profileKey),

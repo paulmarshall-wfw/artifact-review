@@ -46,8 +46,8 @@ describe("document workflow definition", () => {
     }
     expect(validation.errors).toEqual(
       expect.arrayContaining([
-        "Action needs_review.to_missing target missing is not declared in workflowDefinition.states.",
-        "Action needs_review.to_missing does not match a stateMachineDefinition transition."
+        '$.workflowDefinition.actions[9].to: Action target state must exist in states.',
+        '$.workflowDefinition.actions[9]: Action "needs_review.to_missing" maps to an illegal transition "needs_review -> missing".'
       ])
     );
   });

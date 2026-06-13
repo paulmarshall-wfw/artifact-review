@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../service/src/config/env";
-import { buildProviderReadiness, resolveSelectedProfile } from "../service/src/providers/readiness";
+import {
+  buildProviderReadiness,
+  resolveDemoProviderMode,
+  resolveProviderRegistryUrl,
+  resolveSelectedProfile
+} from "../service/src/providers/readiness";
 import type { ProviderTaskAsset } from "../service/src/repositories/providerTasks";
 
 const suggestTaskAsset: ProviderTaskAsset = {
@@ -35,6 +40,26 @@ describe("provider readiness", () => {
     });
 
     expect(resolveSelectedProfile(config, { selectedProviderProfileKey: "saved-profile" })).toBe("saved-profile");
+  });
+
+  it("keeps saved provider runtime settings ahead of bootstrap environment values", () => {
+    const config = loadConfig({
+      INVOKE_PROVIDERS_REGISTRY_URL: "http://127.0.0.1:5181",
+      INVOKE_PROVIDERS_PROFILE: "bootstrap-profile",
+      ARTIFACT_REVIEW_DEMO_PROVIDER_MODE: "false"
+    });
+    const settings = {
+      registryUrl: "http://127.0.0.1:5199",
+      selectedProviderProfileKey: "saved-profile",
+      demoProviderMode: true
+    };
+
+    expect(resolveProviderRegistryUrl(config, settings)).toEqual({
+      registryUrl: "http://127.0.0.1:5199",
+      source: "saved"
+    });
+    expect(resolveSelectedProfile(config, settings)).toBe("saved-profile");
+    expect(resolveDemoProviderMode(config, settings)).toEqual({ enabled: true, source: "saved" });
   });
 
   it("allows deterministic suggestions only when demo mode and task assets are explicit", () => {

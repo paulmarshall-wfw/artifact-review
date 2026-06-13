@@ -56,7 +56,7 @@
     ]
   },
   "workflowDefinition": {
-    "id": "artifact-review_workflow",
+    "id": "document",
     "states": [
       {
         "id": "ingestion",

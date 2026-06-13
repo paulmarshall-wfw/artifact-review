@@ -257,7 +257,6 @@ describe("review mutation HTTP endpoints", () => {
 
   it("stores AI output as a proposed suggestion without mutating component text", async () => {
     const db = createQueuedDatabase([
-      [],
       [
         {
           task_key: "suggest-component-revision",

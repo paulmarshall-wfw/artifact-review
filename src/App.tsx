@@ -12,6 +12,7 @@ import {
   getDocumentDetail,
   getDocumentWorkflowActions,
   getProviderReadiness,
+  getProviderSettings,
   getSetupReadiness,
   getWorkflowStatus,
   ingestFile,
@@ -19,6 +20,7 @@ import {
   listDocuments,
   rejectAiSuggestion,
   saveDocument,
+  saveProviderSettings,
   setHighlight,
   suggestComponentRevision,
   updateComponentText,
@@ -30,6 +32,7 @@ import {
   type DocumentWorkflowActions,
   type EvidenceKind,
   type ProviderReadiness,
+  type ProviderSettings,
   type SetupReadiness,
   type WorkflowStatus,
   type WorkflowValidationResult
@@ -44,6 +47,7 @@ type PendingKey =
   | "initial"
   | "workflow-validate"
   | "workflow-activate"
+  | "provider-settings"
   | "file-read"
   | "file-ingest"
   | "url-ingest"
@@ -78,6 +82,12 @@ type ReviewNoteForm = {
   evidenceValue: string;
 };
 
+type ProviderSettingsForm = {
+  registryUrl: string;
+  selectedProviderProfileKey: string;
+  demoProviderMode: boolean;
+};
+
 type ComponentSection = {
   id: string;
   label: string;
@@ -87,6 +97,12 @@ type ComponentSection = {
 export function App() {
   const [setupReadiness, setSetupReadiness] = useState<SetupReadiness | null>(null);
   const [providerReadiness, setProviderReadiness] = useState<ProviderReadiness | null>(null);
+  const [providerSettings, setProviderSettings] = useState<ProviderSettings | null>(null);
+  const [providerSettingsForm, setProviderSettingsForm] = useState<ProviderSettingsForm>({
+    registryUrl: "",
+    selectedProviderProfileKey: "",
+    demoProviderMode: false
+  });
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus | null>(null);
   const [workflowValidation, setWorkflowValidation] = useState<WorkflowValidationResult | null>(null);
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
@@ -214,14 +230,21 @@ export function App() {
   }, []);
 
   const refreshGlobal = useCallback(async () => {
-    const [setup, provider, workflow, documentList] = await Promise.all([
+    const [setup, provider, settings, workflow, documentList] = await Promise.all([
       getSetupReadiness(),
       getProviderReadiness(),
+      getProviderSettings(),
       getWorkflowStatus(),
       listDocuments()
     ]);
     setSetupReadiness(setup);
     setProviderReadiness(provider);
+    setProviderSettings(settings);
+    setProviderSettingsForm({
+      registryUrl: settings.registryUrl,
+      selectedProviderProfileKey: settings.selectedProviderProfileKey,
+      demoProviderMode: settings.demoProviderMode
+    });
     setWorkflowStatus(workflow);
     setDocuments(documentList.documents);
     setSelectedDocumentId((current) => current ?? documentList.documents[0]?.id ?? null);
@@ -296,6 +319,27 @@ export function App() {
     setWorkflowValidation(null);
     await refreshGlobal();
     setNotice("Workflow fixture is active. Ingest is now available.");
+  }
+
+  async function handleSaveProviderSettings() {
+    setError(null);
+    setNotice(null);
+    const response = await runPending("provider-settings", () =>
+      saveProviderSettings({
+        registryUrl: providerSettingsForm.registryUrl.trim() || null,
+        selectedProviderProfileKey: providerSettingsForm.selectedProviderProfileKey.trim() || null,
+        demoProviderMode: providerSettingsForm.demoProviderMode
+      })
+    );
+    setProviderSettings(response.settings);
+    setProviderReadiness(response.readiness);
+    setProviderSettingsForm({
+      registryUrl: response.settings.registryUrl,
+      selectedProviderProfileKey: response.settings.selectedProviderProfileKey,
+      demoProviderMode: response.settings.demoProviderMode
+    });
+    await refreshGlobal();
+    setNotice("Provider settings saved.");
   }
 
   async function handleFileIngest() {
@@ -714,6 +758,52 @@ export function App() {
             <strong>Readiness</strong>
             <p>Provider actions remain blocked until registry/profile readiness passes.</p>
           </div>
+          <form
+            className="provider-settings-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              reportActionError(handleSaveProviderSettings);
+            }}
+          >
+            <label>
+              Registry URL
+              <input
+                value={providerSettingsForm.registryUrl}
+                onChange={(event) =>
+                  setProviderSettingsForm((current) => ({ ...current, registryUrl: event.target.value }))
+                }
+                placeholder="http://127.0.0.1:5181"
+              />
+              <small>{settingSourceLabel(providerSettings?.sources.registryUrl)}</small>
+            </label>
+            <label>
+              Profile
+              <input
+                value={providerSettingsForm.selectedProviderProfileKey}
+                onChange={(event) =>
+                  setProviderSettingsForm((current) => ({
+                    ...current,
+                    selectedProviderProfileKey: event.target.value
+                  }))
+                }
+                placeholder="profile-key"
+              />
+              <small>{settingSourceLabel(providerSettings?.sources.selectedProviderProfileKey)}</small>
+            </label>
+            <label className="inline-check">
+              <input
+                checked={providerSettingsForm.demoProviderMode}
+                type="checkbox"
+                onChange={(event) =>
+                  setProviderSettingsForm((current) => ({ ...current, demoProviderMode: event.target.checked }))
+                }
+              />
+              Demo mode
+            </label>
+            <button disabled={isPending("provider-settings")} type="submit">
+              {isPending("provider-settings") ? "Saving" : "Save"}
+            </button>
+          </form>
           <div className="readiness-grid wide">
             {setupReadiness?.checks.map((item) => (
               <div className="readiness-item" key={item.key}>
@@ -1216,6 +1306,16 @@ function providerBlocker(readiness: ProviderReadiness | null) {
   }
 
   return readiness.checks.find((check) => !check.ready)?.reason ?? "Provider readiness is blocked.";
+}
+
+function settingSourceLabel(source: ProviderSettings["sources"]["registryUrl"] | undefined) {
+  if (source === "saved") {
+    return "Saved in app settings";
+  }
+  if (source === "env") {
+    return "Using environment default";
+  }
+  return "No saved value";
 }
 
 function formatDateTime(value: string) {

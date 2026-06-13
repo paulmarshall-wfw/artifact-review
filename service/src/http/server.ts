@@ -9,7 +9,13 @@ import { buildSameFormatExport, ExportAssemblyError } from "../domain/exporter.j
 import { checkDatabase } from "../db/pool.js";
 import { combineReadiness } from "../domain/readiness.js";
 import { parseHtmlToComponents, parseMarkdownToComponents, parsePlainTextToComponents } from "../domain/parser.js";
-import { buildProviderReadiness, resolveSelectedProfileSelection, selectProviderForTask } from "../providers/readiness.js";
+import {
+  buildProviderReadiness,
+  resolveDemoProviderMode,
+  resolveProviderRegistryUrl,
+  resolveSelectedProfileSelection,
+  selectProviderForTask
+} from "../providers/readiness.js";
 import { fetchRegistryLookup } from "../providers/registry.js";
 import { suggestComponentRevisionOutputSchema } from "../providers/tasks.js";
 import type { DocumentSummary, ReviewComponent } from "../repositories/documents.js";
@@ -18,12 +24,16 @@ import type { ProviderTaskAsset } from "../repositories/providerTasks.js";
 import type { ReviewComponentForMutation } from "../repositories/review.js";
 import type { JsonValue } from "../repositories/types.js";
 import {
-  findWorkflowAction,
-  getAllowedWorkflowActions,
+  activateDocumentWorkflow,
+  executeDocumentWorkflowAction,
+  getActiveDocumentWorkflow,
+  getDocumentWorkflowActions,
   getEntryState,
+  initializeDocumentWorkflowState,
   summarizeWorkflowDefinition,
-  validateDocumentWorkflowDefinition
-} from "../workflow/definition.js";
+  validateDocumentWorkflowDefinition,
+  workflowErrorResponse
+} from "../workflow/runtime.js";
 import { buildWorkflowReadiness } from "../workflow/readiness.js";
 
 const fileIngestRequestSchema = z.object({
@@ -67,6 +77,19 @@ const exportDocumentRequestSchema = z.object({
   includeReviewBundle: z.boolean().default(false)
 });
 
+const nullableTrimmedStringSchema = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+  z.string().trim().nullable().optional()
+);
+
+const providerSettingsRequestSchema = z.object({
+  registryUrl: nullableTrimmedStringSchema.refine((value) => !value || z.string().url().safeParse(value).success, {
+    message: "Provider registry URL must be a valid URL."
+  }),
+  selectedProviderProfileKey: nullableTrimmedStringSchema,
+  demoProviderMode: z.boolean()
+});
+
 function toSafeJson(value: unknown): JsonValue {
   return JSON.parse(JSON.stringify(value)) as JsonValue;
 }
@@ -105,13 +128,14 @@ async function buildProviderContext(
   repositories: Repositories | null,
   taskKey: string = suggestComponentRevisionTaskKey
 ) {
-  const selectedProviderProfileKey = await repositories?.appSettings.getSelectedProviderProfileKey();
-  const settings = { selectedProviderProfileKey };
+  const settings = (await repositories?.appSettings.getProviderRuntimeSettings()) ?? {};
   const selection = resolveSelectedProfileSelection(config, settings);
+  const registrySelection = resolveProviderRegistryUrl(config, settings);
+  const demoModeSelection = resolveDemoProviderMode(config, settings);
   const taskAsset = repositories ? await repositories.providerTasks.getTaskAsset(taskKey) : null;
   const registry =
-    config.INVOKE_PROVIDERS_REGISTRY_URL && selection.profileKey
-      ? await fetchRegistryLookup(config, selection.profileKey)
+    !demoModeSelection.enabled && registrySelection.registryUrl && selection.profileKey
+      ? await fetchRegistryLookup(registrySelection.registryUrl, selection.profileKey)
       : undefined;
   const readiness = buildProviderReadiness(config, settings, {
     taskKey,
@@ -125,9 +149,34 @@ async function buildProviderContext(
     readiness,
     selectedProfileKey: selection.profileKey,
     selectedProfileSource: selection.source,
+    registryUrl: registrySelection.registryUrl,
+    registryUrlSource: registrySelection.source,
     taskAsset,
     registry,
     provider
+  };
+}
+
+async function buildProviderSettingsResponse(config: AppConfig, repositories: Repositories | null) {
+  const saved = (await repositories?.appSettings.getProviderRuntimeSettings()) ?? {};
+  const registry = resolveProviderRegistryUrl(config, saved);
+  const profile = resolveSelectedProfileSelection(config, saved);
+  const demo = resolveDemoProviderMode(config, saved);
+
+  return {
+    registryUrl: registry.registryUrl ?? "",
+    selectedProviderProfileKey: profile.profileKey ?? "",
+    demoProviderMode: demo.enabled,
+    sources: {
+      registryUrl: registry.source,
+      selectedProviderProfileKey: profile.source,
+      demoProviderMode: demo.source
+    },
+    saved: {
+      registryUrl: saved.registryUrl ?? null,
+      selectedProviderProfileKey: saved.selectedProviderProfileKey ?? null,
+      demoProviderMode: saved.demoProviderMode ?? null
+    }
   };
 }
 
@@ -344,7 +393,7 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
 
   app.get("/api/setup-readiness", async (_request, response) => {
     const database = await checkDatabase(pool);
-    const activeWorkflow = await repositories?.workflows.getActiveDocumentWorkflow();
+    const activeWorkflow = repositories ? await getActiveDocumentWorkflow(repositories) : null;
     const provider = await buildProviderContext(config, repositories);
     const workflow = buildWorkflowReadiness(Boolean(activeWorkflow));
 
@@ -358,7 +407,7 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
   });
 
   app.get("/api/workflow/status", async (_request, response) => {
-    const activeWorkflow = await repositories?.workflows.getActiveDocumentWorkflow();
+    const activeWorkflow = repositories ? await getActiveDocumentWorkflow(repositories) : null;
 
     response.json({
       active: Boolean(activeWorkflow),
@@ -389,23 +438,61 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       return;
     }
 
-    const validation = validateDocumentWorkflowDefinition(request.body);
-    if (!validation.valid) {
-      response.status(422).json(validation);
-      return;
+    try {
+      const activation = await activateDocumentWorkflow(repositories, request.body);
+      response.json({
+        active: true,
+        workflow: summarizeWorkflowDefinition(activation.definition),
+        initialState: activation.initialState
+      });
+    } catch (error) {
+      const errorResponse = workflowErrorResponse(error);
+      response.status(errorResponse.status).json(errorResponse.body);
     }
-
-    await repositories.workflows.setActiveDocumentWorkflow(validation.definition);
-    response.json({
-      active: true,
-      workflow: summarizeWorkflowDefinition(validation.definition),
-      initialState: getEntryState(validation.definition)
-    });
   });
 
   app.get("/api/provider-readiness", async (_request, response) => {
     const provider = await buildProviderContext(config, repositories);
     response.json(provider.readiness);
+  });
+
+  app.get("/api/provider-settings", async (_request, response) => {
+    response.json(await buildProviderSettingsResponse(config, repositories));
+  });
+
+  app.put("/api/provider-settings", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before saving provider settings."
+      });
+      return;
+    }
+
+    const parsed = providerSettingsRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json({
+        error: "invalid_provider_settings",
+        issues: parsed.error.issues.map((issue) => issue.message)
+      });
+      return;
+    }
+
+    await repositories.appSettings.setProviderRuntimeSettings({
+      registryUrl: parsed.data.registryUrl ?? undefined,
+      selectedProviderProfileKey: parsed.data.selectedProviderProfileKey ?? undefined,
+      demoProviderMode: parsed.data.demoProviderMode
+    });
+
+    const [settings, provider] = await Promise.all([
+      buildProviderSettingsResponse(config, repositories),
+      buildProviderContext(config, repositories)
+    ]);
+
+    response.json({
+      settings,
+      readiness: provider.readiness
+    });
   });
 
   app.get("/api/provider-readiness/tasks/:taskKey", async (request, response) => {
@@ -468,7 +555,7 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
 
     const [document, activeWorkflow] = await Promise.all([
       repositories.documents.getDocument(request.params.documentId),
-      repositories.workflows.getActiveDocumentWorkflow()
+      getActiveDocumentWorkflow(repositories)
     ]);
 
     if (!document) {
@@ -487,11 +574,12 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       return;
     }
 
-    const currentState = document.currentWorkflowItemRef ?? getEntryState(activeWorkflow);
+    const workflow = await getDocumentWorkflowActions(repositories, document.id);
+    const currentState = workflow.currentState ?? document.currentWorkflowItemRef ?? getEntryState(activeWorkflow);
     response.json({
       documentId: document.id,
       currentState,
-      actions: getAllowedWorkflowActions(activeWorkflow, currentState)
+      actions: workflow.actions
     });
   });
 
@@ -506,7 +594,7 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
 
     const [document, activeWorkflow] = await Promise.all([
       repositories.documents.getDocument(request.params.documentId),
-      repositories.workflows.getActiveDocumentWorkflow()
+      getActiveDocumentWorkflow(repositories)
     ]);
 
     if (!document) {
@@ -525,28 +613,37 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       return;
     }
 
-    const currentState = document.currentWorkflowItemRef ?? getEntryState(activeWorkflow);
-    const action = findWorkflowAction(activeWorkflow, currentState, request.params.actionId);
-    if (!action) {
-      response.status(409).json({
-        error: "workflow_action_not_allowed",
+    try {
+      const currentState = document.currentWorkflowItemRef ?? getEntryState(activeWorkflow);
+      const executed = await executeDocumentWorkflowAction(repositories, document.id, request.params.actionId);
+      const updatedDocument = await repositories.documents.getDocument(document.id);
+      response.json({
+        document: updatedDocument,
+        transition: {
+          actionId: request.params.actionId,
+          from: currentState,
+          to: executed.result.itemState.state
+        },
+        actions: executed.actions
+      });
+    } catch (error) {
+      const errorResponse = workflowErrorResponse(error);
+      if (errorResponse.body.error === "invalid_transition") {
+        const currentState = document.currentWorkflowItemRef ?? getEntryState(activeWorkflow);
+        response.status(409).json({
+          error: "workflow_action_not_allowed",
+          documentId: document.id,
+          currentState,
+          actionId: request.params.actionId
+        });
+        return;
+      }
+      response.status(errorResponse.status).json({
+        ...errorResponse.body,
         documentId: document.id,
-        currentState,
         actionId: request.params.actionId
       });
-      return;
     }
-
-    const updatedDocument = await repositories.documents.updateDocumentWorkflowState(document.id, action.to);
-    response.json({
-      document: updatedDocument,
-      transition: {
-        actionId: action.id,
-        from: action.from,
-        to: action.to
-      },
-      actions: getAllowedWorkflowActions(activeWorkflow, action.to)
-    });
   });
 
   app.post("/api/ingest/file", async (request, response) => {
@@ -558,7 +655,7 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       return;
     }
 
-    const activeWorkflow = await repositories.workflows.getActiveDocumentWorkflow();
+    const activeWorkflow = await getActiveDocumentWorkflow(repositories);
     if (!activeWorkflow) {
       response.status(409).json({
         error: "workflow_not_configured",
@@ -587,12 +684,14 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
     }
 
     const initialState = getEntryState(activeWorkflow);
-    const document = await repositories.documents.createDocument({
+    let document = await repositories.documents.createDocument({
       name: parsedRequest.data.name,
       sourceType: "file",
       originalFormat: parsedRequest.data.format,
       currentWorkflowItemRef: initialState
     });
+    const itemState = await initializeDocumentWorkflowState(repositories, document.id, initialState);
+    document = (await repositories.documents.getDocument(document.id)) ?? document;
     const version = await repositories.documents.createDocumentVersion({
       documentId: document.id,
       versionNumber: 1,
@@ -617,8 +716,8 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       version,
       components,
       workflow: {
-        currentState: initialState,
-        actions: getAllowedWorkflowActions(activeWorkflow, initialState)
+        currentState: itemState.state,
+        actions: (await getDocumentWorkflowActions(repositories, document.id)).actions
       }
     });
   });
@@ -632,7 +731,7 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       return;
     }
 
-    const activeWorkflow = await repositories.workflows.getActiveDocumentWorkflow();
+    const activeWorkflow = await getActiveDocumentWorkflow(repositories);
     if (!activeWorkflow) {
       response.status(409).json({
         error: "workflow_not_configured",
@@ -690,12 +789,14 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
     }
 
     const initialState = getEntryState(activeWorkflow);
-    const document = await repositories.documents.createDocument({
+    let document = await repositories.documents.createDocument({
       name: parsedRequest.data.name ?? parsedUrl.toString(),
       sourceType: "url",
       originalFormat: "url_snapshot",
       currentWorkflowItemRef: initialState
     });
+    const itemState = await initializeDocumentWorkflowState(repositories, document.id, initialState);
+    document = (await repositories.documents.getDocument(document.id)) ?? document;
     const version = await repositories.documents.createDocumentVersion({
       documentId: document.id,
       versionNumber: 1,
@@ -720,8 +821,8 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       version,
       components,
       workflow: {
-        currentState: initialState,
-        actions: getAllowedWorkflowActions(activeWorkflow, initialState)
+        currentState: itemState.state,
+        actions: (await getDocumentWorkflowActions(repositories, document.id)).actions
       }
     });
   });

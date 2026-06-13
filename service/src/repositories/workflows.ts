@@ -1,7 +1,4 @@
-import {
-  documentWorkflowBundleSchema,
-  type DocumentWorkflowBundle
-} from "../workflow/definition.js";
+import { importDefinitionBundle, type DefinitionBundle } from "state-workflow-runtime";
 import { AppSettingsRepository } from "./appSettings.js";
 import { toJsonValue, type JsonValue, type Queryable } from "./types.js";
 
@@ -14,16 +11,16 @@ export class WorkflowsRepository {
     this.appSettings = new AppSettingsRepository(db);
   }
 
-  async getActiveDocumentWorkflow(): Promise<DocumentWorkflowBundle | null> {
+  async getActiveDocumentWorkflow(): Promise<DefinitionBundle | null> {
     const value = await this.appSettings.get<JsonValue>(activeDocumentWorkflowKey);
     if (!value) {
       return null;
     }
 
-    return documentWorkflowBundleSchema.parse(value);
+    return importDefinitionBundle(value).bundle;
   }
 
-  async setActiveDocumentWorkflow(definition: DocumentWorkflowBundle): Promise<void> {
+  async setActiveDocumentWorkflow(definition: DefinitionBundle): Promise<void> {
     await this.appSettings.set(activeDocumentWorkflowKey, toJsonValue(definition));
   }
 }
