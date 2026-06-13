@@ -4,71 +4,54 @@
 
 - Project name: Artifact Review
 - Handoff type: implementation handoff
-- Updated timestamp UTC: 2026-06-13T00:49:14Z
+- Updated timestamp UTC: 2026-06-13T00:57:17Z
 - Prepared by: Codex
 - Repository, workspace, or folder: `/Users/paulmarshall/Software Development/artifact-review`
 - Branch or working context: Git branch `main`; current HEAD `a15e70f`
-- Session scope: built Build Slice 6 export.
+- Session scope: Build Slice 7 browser and macOS desktop validation.
 
 ### Checkpoint Status
 
 - Git HEAD: `a15e70f`
 - Working tree: dirty
 - Dirty files intentionally in scope:
-  - `.gitignore`
-  - `docs/api-contract.md`
   - `docs/completed-tasks.md`
-  - `docs/data-model.md`
-  - `docs/implementation-sequence.md`
-  - `docs/setup-readiness.md`
+  - `docs/verification-plan.md`
   - `handoff.md`
-  - `service/src/http/server.ts`
-  - `src-tauri/src/lib.rs`
-  - `src/App.tsx`
-  - `src/lib/api.ts`
-  - `src/styles.css`
 - New files intentionally in scope:
-  - `service/src/domain/exporter.ts`
-  - `src-tauri/Cargo.lock`
-  - `src/lib/tauri.ts`
-  - `tests/exporter.test.ts`
-  - `tests/http-export.test.ts`
-- Generated files intentionally ignored:
-  - `src-tauri/gen/`
+  - `src-tauri/icons/icon.png`
 - Last verification:
   - `npm run verify`: passed
   - `npm run lint`: passed
   - `npm test`: passed with 9 test files, 1 skipped Postgres suite, 38 tests passed, and 2 skipped
   - `npm run build`: passed
-  - `cargo check --offline`: blocked before checking app command code because `src-tauri/icons/icon.png` is missing
-- Browser validation: not run for this slice.
-- Tauri desktop validation: not run; native compile is blocked by the missing Tauri icon asset.
+  - `cargo check --offline`: passed after adding `src-tauri/icons/icon.png`
+  - Chrome smoke: passed against `http://127.0.0.1:5182/` with no Chrome console errors
+  - `npm run tauri:dev`: passed on macOS; app process visible as `artifact-review`
+  - Desktop service health: passed outside the sandbox at `http://127.0.0.1:4793/health`
+- Browser validation: Chrome smoke passed.
+- Tauri desktop validation: `npm run tauri:dev` launched the macOS shell.
+- Windows smoke validation: pending; not runnable from this macOS workspace.
 - Next checkpoint action: leave dirty intentionally unless the user asks to commit.
 
 ## 2. Executive Summary
 
-Build Slice 6 is implemented.
+Build Slice 7 is partially implemented and validated on the available local platforms.
 
 Completed now:
 
-- `POST /api/documents/:documentId/export` builds same-format reviewed output for `txt`, `md`, `html`, `htm`, and URL snapshots.
-- Export reconstruction applies each review component's current text to the imported source snapshot through stored source ranges.
-- `txt` and `md` exports append review notes in matching text/Markdown form.
-- `html`, `htm`, and URL snapshot exports embed review notes plus JSON metadata in the HTML.
-- Optional JSON review bundles include document identity, source/latest version metadata, components, annotations, questions, evidence, highlights, and AI suggestions.
-- When `destinationPath` is supplied, the TypeScript service writes the export and optional beside-file review bundle.
-- When no destination is supplied, the endpoint returns downloadable content for browser/dev mode.
-- React exposes explicit Export and JSON bundle controls in the review top bar.
-- Tauri is limited to export destination selection and reveal-in-folder commands; it does not assemble export content or mutate documents.
-- Added export round-trip and HTTP endpoint tests.
-- Added `src-tauri/Cargo.lock` after native dependency resolution and ignored generated Tauri schema output under `src-tauri/gen/`.
+- Added `src-tauri/icons/icon.png` so Tauri development builds can reach the app command layer.
+- Re-ran `cargo check --offline`; it now passes.
+- Ran local Chrome smoke validation against the Vite UI.
+- Ran `npm run tauri:dev` on macOS; the TypeScript service, Vite UI, Cargo dev build, and native app launch all completed.
+- Confirmed the desktop-launched service health endpoint reports `{"status":"ok","service":"artifact-review-service","version":"0.1.0"}`.
 
 Still incomplete or blocked:
 
 - `state-workflow-runtime` is not installed or wired.
 - Real registry provider adapter execution is still blocked until provider runtime dependencies are explicitly approved and installed.
 - Database-backed Chrome UI validation with populated review/suggestion data is still pending.
-- `npm run tauri:dev` and native desktop validation are blocked until the missing icon asset is added or the Tauri config is adjusted.
+- Windows smoke validation is still pending and remains required before any distribution work or discussion.
 
 ## 3. Current State
 
@@ -85,7 +68,7 @@ Not yet verified:
 
 - Live export from a database-backed browser session.
 - Tauri destination picker and reveal-in-folder in a running desktop shell.
-- Full Tauri compile/run because `src-tauri/icons/icon.png` is missing.
+- Windows smoke validation.
 
 ## 4. Active Constraints
 
@@ -101,16 +84,19 @@ Not yet verified:
 
 Most recent verified commands:
 
+- `cargo check --offline`: passed.
+- Chrome smoke against `http://127.0.0.1:5182/`: passed; setup/provider/workflow blockers were visible, ingest and export stayed disabled, and Chrome reported no console errors.
+- `npm run tauri:dev`: launched the macOS desktop shell.
+- `curl -sS http://127.0.0.1:4793/health`: passed outside the sandbox while `npm run tauri:dev` was running.
 - `npm run lint`: passed.
 - `npm test`: passed with 9 test files, 1 skipped Postgres suite, 38 tests passed, and 2 skipped.
 - `npm run build`: passed.
 - `npm run verify`: passed with 9 test files, 1 skipped Postgres suite, 38 tests passed, and 2 skipped.
-- `cargo check --offline`: failed before app command checking because Tauri codegen could not open `src-tauri/icons/icon.png`.
 
 Environment notes:
 
-- `DATABASE_URL` was unset for default verification.
-- `cargo check --offline` generated `src-tauri/Cargo.lock` and generated Tauri schema output under `src-tauri/gen/`; `src-tauri/gen/` is now ignored.
+- `DATABASE_URL` was unset for browser and desktop validation, so the expected database/setup blockers rendered.
+- The sandboxed loopback probe to `127.0.0.1:4793` failed, but the same health check passed outside the sandbox.
 
 ## 6. Files to Open First
 
@@ -126,14 +112,15 @@ Environment notes:
 - `tests/exporter.test.ts`: format reconstruction tests.
 - `tests/http-export.test.ts`: export endpoint tests.
 - `docs/completed-tasks.md`: append-only completed work ledger.
+- `docs/verification-plan.md`: current validation sequence and platform gates.
 
 ## 7. Next Actions
 
 Next:
 
-- Add or configure the missing Tauri icon asset so `cargo check --offline` and `npm run tauri:dev` can reach the app command layer.
 - Run database-backed Chrome validation with an active workflow, ingested document, review records, and export.
-- Run `npm run tauri:dev` and validate destination selection plus reveal-in-folder.
+- Run Windows smoke validation before any distribution work or discussion.
+- Validate Tauri destination selection plus reveal-in-folder in a running desktop shell.
 
 Blocked or deferred:
 
@@ -142,4 +129,4 @@ Blocked or deferred:
 
 ## 8. Ready-Made Prompt for Starting a New Thread
 
-Read `handoff.md` as the hot-context source for `/Users/paulmarshall/Software Development/artifact-review`. Treat the current dirty tree as intentional and do not reset or discard changes. Continue after Build Slice 6 export. Preserve the service-owned export boundary: TypeScript service assembles and writes exports; Tauri only selects destinations and reveals exported files. Before Tauri validation, address the missing `src-tauri/icons/icon.png` asset or adjust the Tauri config. Do not install dependencies, commit, release, or wire provider/runtime packages unless explicitly approved.
+Read `handoff.md` as the hot-context source for `/Users/paulmarshall/Software Development/artifact-review`. Treat the current dirty tree as intentional and do not reset or discard changes. Continue Build Slice 7 after Chrome smoke and macOS `npm run tauri:dev` validation. Preserve the service-owned export boundary: TypeScript service assembles and writes exports; Tauri only selects destinations and reveals exported files. Windows smoke validation is still required before any distribution work or discussion. Do not install dependencies, commit, release, package, publish, or wire provider/runtime packages unless explicitly approved.

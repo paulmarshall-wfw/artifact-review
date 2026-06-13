@@ -4,6 +4,11 @@ Append brief entries here when project work is completed. Keep this file concise
 
 ## 2026-06-13
 
+- Task: Start desktop and cross-platform validation slice.
+  Outcome: Added `src-tauri/icons/icon.png` so Tauri development builds can reach the app command layer, ran the required Chrome smoke before desktop validation, and launched the macOS Tauri shell through `npm run tauri:dev`. Windows smoke validation remains pending because this workspace is macOS-only, and remains required before any distribution work or discussion.
+  Verification: `cargo check --offline` passed; Chrome smoke against `http://127.0.0.1:5182/` passed with setup/provider/workflow blockers visible, ingest/export disabled, and no Chrome console errors; `npm run tauri:dev` compiled and launched the macOS `artifact-review` app; `curl -sS http://127.0.0.1:4793/health` passed outside the sandbox while the desktop run was active.
+  Traceability: Git branch `main` at `a15e70f`; no commit yet; changed Tauri icon asset, verification plan, completed-task ledger, and handoff.
+
 - Task: Build export slice.
   Outcome: Implemented `/api/documents/:documentId/export` for same-format reviewed output across `txt`, `md`, `html`, `htm`, and URL snapshots, including optional beside-file JSON review bundles. React now exposes explicit Export and JSON bundle controls, browser/dev mode downloads returned files, and Tauri is limited to destination selection plus reveal-in-folder while the service owns export assembly and file writes.
   Verification: `npm run verify` passed with 9 test files, 1 skipped Postgres suite, 38 tests passed, and 2 skipped; `cargo check --offline` generated `src-tauri/Cargo.lock` but stopped on the existing missing Tauri icon asset at `src-tauri/icons/icon.png`.
