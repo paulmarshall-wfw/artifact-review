@@ -4,11 +4,11 @@
 
 - Project name: Artifact Review
 - Handoff type: implementation handoff
-- Updated timestamp UTC: 2026-06-13T04:33:54Z
+- Updated timestamp UTC: 2026-06-13T05:12:25Z
 - Prepared by: Codex
 - Repository, workspace, or folder: `/Users/paulmarshall/Software Development/artifact-review`
 - Branch or working context: Git branch `main`; current HEAD `9edb45a`
-- Session scope: provider registry integration compliance, local port reassignment, and continuity documents.
+- Session scope: provider registry integration compliance, local port reassignment, continuity documents, and the review/admin UI split.
 
 ### Checkpoint Status
 
@@ -57,6 +57,12 @@
 - Last verification:
   - command: `npm run verify`
   - result: passed with 10 test files, 1 skipped Postgres suite, 43 tests passed, and 2 skipped; Vite production build passed
+  - timestamp UTC: 2026-06-13T05:12:25Z
+  - command: Chrome smoke on `http://127.0.0.1:5184/`
+  - result: partial pass; verified `Document Review` has no setup/provider/settings/ingest panels, `Admin / Setup` contains workflow/provider/settings/ingest controls, inactive workflow blocks ingest in Admin, and Focus mode hides review chrome. Document/component mutation flows were not exercised because no workflow activation or ingest was performed. Narrow viewport resizing was not available through the current Chrome automation surface.
+  - timestamp UTC: 2026-06-13T05:11:42Z
+  - command: `npm run verify`
+  - result: passed with 10 test files, 1 skipped Postgres suite, 43 tests passed, and 2 skipped; Vite production build passed
   - timestamp UTC: 2026-06-13T04:31:01Z
   - command: `python3 "/Users/paulmarshall/Software Development/All Standards/scripts/check-local-port-registry.py"`
   - result: passed; existing unrelated conflicts in other projects remain reported
@@ -77,6 +83,9 @@ Completed work history is tracked in `docs/completed-tasks.md`; do not duplicate
 
 Complete now:
 
+- React is split into two top-level areas: `Document Review` for the document review/editor workspace and `Admin / Setup` for workflow activation, readiness, provider settings, and ingest.
+- The review page follows the document-centric mockup direction with workflow buckets, searchable document list, document toolbar, component stats/search, sectioned component canvas, inline component review tabs, and Normal/Focus modes.
+- The old right-side component detail drawer has been replaced by inline tabs for Text, Annotations, Questions, Evidence, and AI Suggestions.
 - Provider-backed action flow goes through a service-owned provider runtime facade instead of endpoint-specific provider plumbing.
 - Provider readiness is task-specific and includes invocation summaries such as selected provider/profile/adapter, prompt version, demo mode, and `externalSend`.
 - AI suggestions remain proposal-only until explicit accept/reject user action.
@@ -86,8 +95,9 @@ Complete now:
 
 Incomplete or not yet verified:
 
+- End-to-end document/component mutation smoke was not run in Chrome because this pass did not activate workflow or ingest sample documents.
+- Narrow viewport visual validation could not be completed with the current Chrome automation surface.
 - Live real-provider validation still needs a reachable provider registry profile, selected provider, adapter, and local secret reference.
-- Chrome smoke was not rerun after the port reassignment.
 - macOS Tauri smoke was not rerun after the port reassignment.
 - Windows smoke validation remains pending and is required before any distribution work or discussion.
 
@@ -110,8 +120,10 @@ Definition of done for the next pass:
 Working:
 
 - `npm run verify` passes.
+- Chrome smoke verifies the top-level `Document Review` / `Admin / Setup` split, review page removal of setup/admin panels, Admin-owned workflow/provider/settings/ingest controls, Admin ingest blocking when the workflow is inactive, and Focus mode hiding review chrome.
 - Shared local port registry checker passes after reserving Artifact Review `5184` and `4794`.
 - `.env.example`, Vite, service config, Tauri config, README, AGENTS runtime notes, setup docs, and verification docs all point to the new ports.
+- Local ignored `.env` was aligned to `ARTIFACT_REVIEW_SERVICE_PORT=4794` and `VITE_ARTIFACT_REVIEW_API_BASE=http://127.0.0.1:4794` so browser smoke reaches the current service port.
 - Provider readiness endpoints expose task-specific invocation context.
 - React displays provider readiness and `externalSend` at the AI Suggest invocation point.
 - Task-run detail preserves provider/profile/validation/external-send provenance.
@@ -129,7 +141,8 @@ Not Working Yet:
 
 Not Yet Verified:
 
-- Chrome smoke on `http://127.0.0.1:5184/`.
+- Chrome document/component mutation smoke on `http://127.0.0.1:5184/` with an active workflow and at least one ingested document.
+- Narrow viewport Chrome validation for overlap and horizontal overflow.
 - `npm run tauri:dev` with desktop service health at `http://127.0.0.1:4794/health`.
 
 ## 5. Active Constraints
@@ -162,7 +175,8 @@ Useful next commands:
 
 Unverified areas:
 
-- Browser smoke on the new UI port.
+- Browser smoke for document/component edit, annotation, question, evidence, AI suggest, accept, reject, save, and export flows after explicit approval to activate workflow and ingest a test document.
+- Narrow browser viewport validation.
 - Desktop smoke on the new UI/service ports.
 - Live real-provider invocation with local secret readiness.
 
@@ -173,6 +187,7 @@ Unverified areas:
 - `service/src/http/server.ts`: readiness, provider settings, and AI suggestion endpoint wiring.
 - `service/migrations/004_block_future_provider_task_hooks.sql`: guardrails for future provider-backed task hooks.
 - `src/App.tsx`: Settings, provider readiness display, AI Suggest, and task-run provenance UI.
+- `src/styles.css`: current two-area shell, review canvas, inline review panels, admin setup layout, and responsive rules.
 - `src/lib/api.ts`: typed client surface for provider readiness and task-run details.
 - `AGENTS.md`: current local ports and project constraints.
 - `docs/completed-tasks.md`: append-only completed work ledger.
