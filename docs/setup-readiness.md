@@ -9,8 +9,8 @@ Copy `.env.example` to `.env` and fill values appropriate for local development.
 | Variable | Required for | Notes |
 | --- | --- | --- |
 | `ARTIFACT_REVIEW_SERVICE_HOST` | service startup | Defaults to `127.0.0.1`. |
-| `ARTIFACT_REVIEW_SERVICE_PORT` | service startup | Defaults to registered port `4793`. |
-| `VITE_ARTIFACT_REVIEW_API_BASE` | UI to service calls | Defaults to `http://127.0.0.1:4793`. |
+| `ARTIFACT_REVIEW_SERVICE_PORT` | service startup | Defaults to registered port `4794`. |
+| `VITE_ARTIFACT_REVIEW_API_BASE` | UI to service calls | Defaults to `http://127.0.0.1:4794`. |
 | `DATABASE_URL` | database-backed work | Configured external/dev Postgres connection string. |
 | `INVOKE_PROVIDERS_REGISTRY_URL` | first-run provider bootstrap | Shared provider registry URL. A saved provider registry URL in app settings takes priority. |
 | `INVOKE_PROVIDERS_PROFILE` | first-run provider bootstrap | Used only when no saved selected profile exists. |
@@ -24,8 +24,8 @@ Copy `.env.example` to `.env` and fill values appropriate for local development.
 | `GET /health` | Service process is alive. Does not prove dependencies are ready. |
 | `GET /ready` | Database readiness only. |
 | `GET /api/setup-readiness` | Combined database, provider, and workflow readiness. |
-| `GET /api/provider-readiness` | Provider registry/profile/task/schema/fallback/demo readiness. |
-| `GET /api/provider-readiness/tasks/:taskKey` | Provider readiness for a task key. |
+| `GET /api/provider-readiness` | Provider registry/profile/task/schema/fallback/demo readiness plus the default task invocation summary. |
+| `GET /api/provider-readiness/tasks/:taskKey` | Provider readiness and invocation summary for a task key. |
 | `GET /api/provider-settings` | Effective provider registry URL, selected profile, demo mode, and value sources. |
 | `PUT /api/provider-settings` | Saves non-secret provider runtime settings in app settings. |
 
@@ -38,6 +38,8 @@ The Settings section can save:
 - explicit deterministic demo mode
 
 These settings are stored in `app_settings` and take precedence over first-run environment values. Clearing a text field removes the saved value and allows the corresponding environment bootstrap value to apply again. Raw provider secrets remain outside Postgres and are only checked through local secret references.
+
+Provider-backed actions should use task-specific readiness. The component detail panel shows the selected provider, profile, adapter, prompt version, demo-mode state, and `externalSend` before `AI Suggest` can be invoked. Suggestions keep task-run provenance visible with provider/profile, validation status, latency, and external-send state.
 
 ## Expected First-Run Blockers
 

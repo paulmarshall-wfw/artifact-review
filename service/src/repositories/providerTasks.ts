@@ -62,6 +62,37 @@ export class ProviderTasksRepository {
 
     return result.rows[0] ? mapTaskAsset(result.rows[0]) : null;
   }
+
+  async listTaskAssets(): Promise<ProviderTaskAsset[]> {
+    const result = await this.db.query<ProviderTaskAssetRow>(
+      `
+        select
+          task_definitions.task_key,
+          task_definitions.provider_key,
+          task_definitions.required_capability,
+          task_definitions.prompt_version,
+          task_definitions.render_slot,
+          task_definitions.hook_key,
+          prompt_versions.prompt,
+          structured_output_schemas.version as schema_version,
+          structured_output_schemas.schema,
+          processing_hooks.implementation_key as hook_implementation_key,
+          processing_hooks.policy as hook_policy
+        from task_definitions
+        left join prompt_versions
+          on prompt_versions.task_key = task_definitions.task_key
+          and prompt_versions.version = task_definitions.prompt_version
+        left join structured_output_schemas
+          on structured_output_schemas.task_key = task_definitions.task_key
+          and structured_output_schemas.version = task_definitions.prompt_version
+        left join processing_hooks
+          on processing_hooks.hook_key = task_definitions.hook_key
+        order by task_definitions.render_slot asc, task_definitions.task_key asc
+      `
+    );
+
+    return result.rows.map(mapTaskAsset);
+  }
 }
 
 function mapTaskAsset(row: ProviderTaskAssetRow): ProviderTaskAsset {

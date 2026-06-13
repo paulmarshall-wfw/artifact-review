@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup C: Split Editor with Persistent Review Sidebar</title>
+<style>
+  :root {
+    --bg: #f0f2f5;
+    --surface: #ffffff;
+    --surface-alt: #f8f9fb;
+    --border: #dfe3ea;
+    --border-light: #eaecf1;
+    --text: #171c26;
+    --text-2: #4e5869;
+    --text-3: #8790a0;
+    --blue: #2d5bd2;
+    --blue-light: #eaf0fc;
+    --blue-dim: #a8bfe6;
+    --teal: #0e7c6b;
+    --teal-light: #e5f5f2;
+    --purple: #6941b8;
+    --purple-light: #f2edfc;
+    --amber: #a25d0a;
+    --amber-light: #fdf4e4;
+    --red: #bf2d1c;
+    --red-light: #fceeed;
+    --green: #1b7a42;
+    --green-light: #eaf6ef;
+    --highlight: #fef8e0;
+    --highlight-bar: #e8cf3a;
+    --r: 6px;
+    --r-lg: 10px;
+    --shadow: 0 1px 4px rgba(0,0,0,0.06);
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+
+  .shell {
+    display: grid;
+    grid-template-columns: 56px 220px minmax(0, 1fr) 360px;
+    grid-template-rows: 48px minmax(0, 1fr) 32px;
+    height: 100vh;
+  }
+
+  /* === RAIL (icon sidebar) === */
+  .rail {
+    grid-row: 1 / -1;
+    background: #1e2330;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 0;
+    gap: 4px;
+  }
+
+  .rail-icon {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    border-radius: var(--r);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: #8891a4;
+    transition: background 0.12s, color 0.12s;
+    position: relative;
+  }
+
+  .rail-icon:hover { background: rgba(255,255,255,0.08); color: #bcc4d4; }
+  .rail-icon.active { background: rgba(255,255,255,0.12); color: #fff; }
+  .rail-icon.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    bottom: 10px;
+    width: 3px;
+    background: var(--blue);
+    border-radius: 0 3px 3px 0;
+  }
+
+  .rail-brand {
+    font-size: 20px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 12px;
+    letter-spacing: -0.04em;
+  }
+
+  .rail-spacer { flex: 1; }
+
+  /* === HEADER === */
+  .header {
+    grid-column: 2 / -1;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .header-title {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .state-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 12px;
+    white-space: nowrap;
+  }
+
+  .state-review { background: var(--amber-light); color: var(--amber); }
+  .state-approved { background: var(--green-light); color: var(--green); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .btn {
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    background: var(--surface);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  .btn:hover { background: var(--bg); }
+  .btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .btn-primary:hover { background: #2450b0; }
+  .btn-sm { padding: 4px 10px; }
+  .btn-ghost { border-color: transparent; background: transparent; color: var(--text-2); }
+  .btn-ghost:hover { background: var(--bg); color: var(--text); }
+  .btn-accept { background: var(--green); border-color: var(--green); color: #fff; }
+  .btn-reject { color: var(--red); border-color: #e0b8b3; }
+  .btn-reject:hover { background: var(--red-light); }
+
+  .header-sep {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+    margin: 0 4px;
+  }
+
+  .workflow-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .workflow-btn {
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    background: var(--surface);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-2);
+    cursor: pointer;
+  }
+
+  .workflow-btn:hover { background: var(--bg); color: var(--text); }
+
+  /* === DOC LIST PANEL === */
+  .doc-panel {
+    grid-row: 2 / 4;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .doc-panel-search {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .doc-panel-search input {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    font: inherit;
+    font-size: 12px;
+    background: var(--surface-alt);
+    outline: none;
+  }
+
+  .doc-panel-search input:focus { border-color: var(--blue); }
+
+  .doc-panel-label {
+    padding: 10px 14px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-3);
+  }
+
+  .doc-panel-scroll {
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .ditem {
+    padding: 10px 14px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: background 0.1s;
+  }
+
+  .ditem:hover { background: var(--surface-alt); }
+  .ditem.active { background: var(--blue-light); border-left-color: var(--blue); }
+
+  .ditem-name {
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ditem-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+    font-size: 11px;
+    color: var(--text-3);
+  }
+
+  .ditem-state {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 8px;
+  }
+
+  .ditem-state.review { background: var(--amber-light); color: var(--amber); }
+  .ditem-state.approved { background: var(--green-light); color: var(--green); }
+  .ditem-state.draft { background: var(--bg); color: var(--text-3); }
+
+  .doc-panel-sections {
+    border-top: 1px solid var(--border-light);
+  }
+
+  .section-nav-item {
+    padding: 7px 14px;
+    font-size: 12px;
+    color: var(--text-2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .section-nav-item:hover { background: var(--surface-alt); }
+  .section-nav-item.active { color: var(--blue); font-weight: 500; background: var(--blue-light); }
+
+  .section-nav-count {
+    font-size: 10px;
+    color: var(--text-3);
+    background: var(--bg);
+    padding: 1px 6px;
+    border-radius: 8px;
+  }
+
+  .section-nav-item.active .section-nav-count { background: var(--blue); color: #fff; }
+
+  /* === EDITOR (center) === */
+  .editor-area {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .editor-toolbar {
+    padding: 6px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .editor-toolbar input {
+    flex: 1;
+    max-width: 280px;
+    padding: 5px 9px;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    font: inherit;
+    font-size: 12px;
+    background: var(--surface-alt);
+    outline: none;
+  }
+
+  .editor-toolbar input:focus { border-color: var(--blue); }
+
+  .toolbar-group {
+    display: flex;
+    gap: 2px;
+    margin-left: auto;
+  }
+
+  .tb {
+    width: 30px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    border-radius: var(--r);
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .tb:hover { background: var(--bg); color: var(--text); }
+  .tb.active { background: var(--blue-light); color: var(--blue); }
+
+  .editor-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+  }
+
+  .section-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 20px 0 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .section-divider:first-child { margin-top: 0; }
+
+  .section-arrow {
+    font-size: 9px;
+    color: var(--text-3);
+    transition: transform 0.12s;
+    width: 14px;
+    text-align: center;
+  }
+
+  .section-divider.open .section-arrow { transform: rotate(90deg); }
+
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-3);
+  }
+
+  .section-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border-light);
+  }
+
+  .section-badge {
+    font-size: 10px;
+    color: var(--text-3);
+  }
+
+  /* Components in editor */
+  .comp {
+    position: relative;
+    padding: 8px 12px 8px 16px;
+    margin: 1px 0;
+    border-radius: var(--r);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.1s;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 8px;
+  }
+
+  .comp:hover { background: var(--surface-alt); border-color: var(--border-light); }
+
+  .comp.active {
+    background: var(--blue-light);
+    border-color: var(--blue);
+  }
+
+  .comp.highlighted {
+    border-left: 3px solid var(--highlight-bar);
+    background: var(--highlight);
+  }
+
+  .comp.highlighted.active {
+    background: #f5eed0;
+    border-color: var(--blue);
+    border-left: 3px solid var(--highlight-bar);
+  }
+
+  .comp-text {
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .comp-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    padding-top: 2px;
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
+
+  .comp:hover .comp-right,
+  .comp.active .comp-right { opacity: 1; }
+
+  .comp-badge-row {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .cbadge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  .cbadge-a { background: #e2ecfa; color: #2b5aac; }
+  .cbadge-q { background: var(--amber-light); color: var(--amber); }
+  .cbadge-e { background: var(--teal-light); color: var(--teal); }
+  .cbadge-ai { background: var(--purple-light); color: var(--purple); }
+  .cbadge-kind { background: var(--bg); color: var(--text-3); }
+
+  .mini-btn {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: var(--surface);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow);
+  }
+
+  .mini-btn:hover { color: var(--blue); background: var(--blue-light); }
+
+  /* === RIGHT: REVIEW PANEL === */
+  .review-panel {
+    grid-row: 2 / 4;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .rp-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .rp-header h2 {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .rp-kind {
+    font-size: 11px;
+    color: var(--text-3);
+    padding: 2px 7px;
+    background: var(--bg);
+    border-radius: 4px;
+  }
+
+  .rp-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .rp-tab {
+    flex: 1;
+    padding: 9px 6px;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-3);
+    cursor: pointer;
+    text-align: center;
+    position: relative;
+    letter-spacing: 0.02em;
+  }
+
+  .rp-tab:hover { color: var(--text-2); }
+  .rp-tab.active { color: var(--blue); }
+  .rp-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 8px;
+    right: 8px;
+    height: 2px;
+    background: var(--blue);
+    border-radius: 2px 2px 0 0;
+  }
+
+  .rp-tab-count {
+    font-size: 9px;
+    font-weight: 700;
+    background: var(--bg);
+    color: var(--text-3);
+    padding: 1px 5px;
+    border-radius: 8px;
+    margin-left: 3px;
+  }
+
+  .rp-tab.active .rp-tab-count { background: var(--blue); color: #fff; }
+
+  .rp-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+  }
+
+  .rp-section {
+    margin-bottom: 16px;
+  }
+
+  .rp-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-3);
+    margin-bottom: 6px;
+  }
+
+  .rp-text-editor {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: vertical;
+    outline: none;
+  }
+
+  .rp-text-editor:focus { border-color: var(--blue); }
+
+  .rp-editor-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 6px;
+  }
+
+  .rp-unsaved {
+    font-size: 11px;
+    color: var(--amber);
+    font-weight: 500;
+  }
+
+  .rp-btn-group {
+    display: flex;
+    gap: 4px;
+  }
+
+  .rp-ai-card {
+    border: 1px solid #d5cce8;
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+
+  .rp-ai-header {
+    padding: 10px 14px;
+    background: var(--purple-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .rp-ai-status {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--purple);
+  }
+
+  .rp-ai-conf {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-3);
+  }
+
+  .conf-track {
+    width: 50px;
+    height: 4px;
+    background: #e0d8ee;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .conf-fill {
+    height: 100%;
+    background: var(--purple);
+    border-radius: 3px;
+  }
+
+  .rp-ai-body {
+    padding: 12px 14px;
+  }
+
+  .rp-ai-proposed {
+    font-size: 13px;
+    line-height: 1.65;
+    padding: 8px 10px;
+    background: var(--surface-alt);
+    border-radius: var(--r);
+    border: 1px solid var(--border-light);
+  }
+
+  .rp-ai-rationale {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-2);
+    line-height: 1.5;
+  }
+
+  .rp-ai-prov {
+    padding: 8px 14px;
+    border-top: 1px solid var(--border-light);
+    background: var(--surface-alt);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 10px;
+  }
+
+  .prov-item {
+    font-size: 11px;
+  }
+
+  .prov-item .prov-label {
+    color: var(--text-3);
+    font-size: 10px;
+  }
+
+  .prov-item .prov-value {
+    font-weight: 500;
+    color: var(--text-2);
+  }
+
+  .rp-ai-actions {
+    padding: 8px 14px;
+    border-top: 1px solid var(--border-light);
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+  }
+
+  /* Notes list */
+  .note-card {
+    background: var(--surface-alt);
+    border: 1px solid var(--border-light);
+    border-radius: var(--r);
+    padding: 8px 10px;
+    margin-bottom: 6px;
+  }
+
+  .note-text {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .note-meta {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 3px;
+  }
+
+  .add-input-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .add-input-row input,
+  .add-input-row textarea {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    font: inherit;
+    font-size: 12px;
+    outline: none;
+    resize: none;
+  }
+
+  .add-input-row input:focus,
+  .add-input-row textarea:focus { border-color: var(--blue); }
+
+  .evidence-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--surface-alt);
+    border: 1px solid var(--border-light);
+    border-radius: var(--r);
+    margin-bottom: 4px;
+    font-size: 12px;
+  }
+
+  .evidence-kind {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--teal);
+    background: var(--teal-light);
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.03em;
+  }
+
+  .evidence-val {
+    flex: 1;
+    color: var(--text-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* === STATUS BAR === */
+  .statusbar {
+    grid-column: 2 / -1;
+    background: var(--surface);
+    border-top: 1px solid var(--border-light);
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-3);
+  }
+
+  .status-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+
+  .status-right {
+    display: flex;
+    gap: 14px;
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- ICON RAIL -->
+  <nav class="rail">
+    <div class="rail-brand">A</div>
+    <button class="rail-icon active" title="Review">&#128196;</button>
+    <button class="rail-icon" title="Ingest">&#128229;</button>
+    <button class="rail-icon" title="Workflow">&#9881;</button>
+    <button class="rail-icon" title="Providers">&#9889;</button>
+    <span class="rail-spacer"></span>
+    <button class="rail-icon" title="Settings">&#9776;</button>
+  </nav>
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <span class="header-title">API Contract Specification</span>
+      <span class="state-chip state-review">Needs Review</span>
+      <div class="workflow-actions">
+        <button class="workflow-btn">Start Review</button>
+        <button class="workflow-btn">Approve</button>
+      </div>
+    </div>
+    <div class="header-right">
+      <span style="font-size:12px; color:var(--text-3)">18 components &middot; v3</span>
+      <span class="header-sep"></span>
+      <button class="btn btn-sm">Save</button>
+      <button class="btn btn-sm btn-primary">Export</button>
+    </div>
+  </header>
+
+  <!-- DOC LIST -->
+  <aside class="doc-panel">
+    <div class="doc-panel-search">
+      <input type="text" placeholder="Search documents...">
+    </div>
+
+    <div class="doc-panel-label">Review Queue</div>
+    <div class="doc-panel-scroll">
+      <div class="ditem active">
+        <div class="ditem-name">API Contract Specification</div>
+        <div class="ditem-row">
+          <span class="ditem-state review">Review</span>
+          <span>md</span>
+          <span>12m</span>
+        </div>
+      </div>
+      <div class="ditem">
+        <div class="ditem-name">Architecture Decision Record 004</div>
+        <div class="ditem-row">
+          <span class="ditem-state review">In Review</span>
+          <span>html</span>
+          <span>1h</span>
+        </div>
+      </div>
+      <div class="ditem">
+        <div class="ditem-name">Data Model Reference</div>
+        <div class="ditem-row">
+          <span class="ditem-state review">Review</span>
+          <span>txt</span>
+          <span>3h</span>
+        </div>
+      </div>
+      <div class="ditem">
+        <div class="ditem-name">Setup Readiness Checklist</div>
+        <div class="ditem-row">
+          <span class="ditem-state approved">Approved</span>
+          <span>md</span>
+          <span>1d</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="doc-panel-sections">
+      <div class="doc-panel-label">Sections</div>
+      <div class="section-nav-item active">
+        <span>Overview</span>
+        <span class="section-nav-count">4</span>
+      </div>
+      <div class="section-nav-item">
+        <span>Endpoints</span>
+        <span class="section-nav-count">8</span>
+      </div>
+      <div class="section-nav-item">
+        <span>Error Handling</span>
+        <span class="section-nav-count">3</span>
+      </div>
+      <div class="section-nav-item">
+        <span>Versioning</span>
+        <span class="section-nav-count">3</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- EDITOR CANVAS -->
+  <main class="editor-area">
+    <div class="editor-toolbar">
+      <input type="text" placeholder="Filter components...">
+      <div class="toolbar-group">
+        <button class="tb active" title="All">All</button>
+        <button class="tb" title="Highlighted only">&#9733;</button>
+        <button class="tb" title="With notes">&#9998;</button>
+        <button class="tb" title="With AI proposals">&#10024;</button>
+      </div>
+    </div>
+
+    <div class="editor-scroll">
+      <div class="section-divider open">
+        <span class="section-arrow">&#9654;</span>
+        <span class="section-title">Overview</span>
+        <span class="section-line"></span>
+        <span class="section-badge">4</span>
+      </div>
+
+      <div class="comp active highlighted">
+        <div>
+          <div class="comp-text">
+            The artifact review API exposes a RESTful interface for document ingestion, component-level editing, and
+            structured review workflows with full audit provenance.
+          </div>
+          <div class="comp-badge-row">
+            <span class="cbadge cbadge-kind">heading</span>
+            <span class="cbadge cbadge-a">2 notes</span>
+            <span class="cbadge cbadge-ai">1 proposal</span>
+          </div>
+        </div>
+        <div class="comp-right">
+          <button class="mini-btn" title="Highlight">&#9733;</button>
+          <button class="mini-btn" title="AI Suggest">&#10024;</button>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div>
+          <div class="comp-text">
+            All endpoints accept and return JSON. Authentication is handled by the surrounding infrastructure layer,
+            not by the review API itself.
+          </div>
+          <div class="comp-badge-row">
+            <span class="cbadge cbadge-kind">paragraph</span>
+          </div>
+        </div>
+        <div class="comp-right">
+          <button class="mini-btn" title="Highlight">&#9734;</button>
+          <button class="mini-btn" title="AI Suggest">&#10024;</button>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div>
+          <div class="comp-text">
+            Documents are the top-level resource. Each document contains components, which are the reviewable units
+            of text extracted during ingestion.
+          </div>
+          <div class="comp-badge-row">
+            <span class="cbadge cbadge-kind">paragraph</span>
+            <span class="cbadge cbadge-q">1 question</span>
+          </div>
+        </div>
+        <div class="comp-right">
+          <button class="mini-btn" title="Highlight">&#9734;</button>
+          <button class="mini-btn" title="AI Suggest">&#10024;</button>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div>
+          <div class="comp-text">
+            The review surface supports annotations, open questions, evidence attachment, highlighting, and
+            AI-assisted revision suggestions with full task-run provenance.
+          </div>
+          <div class="comp-badge-row">
+            <span class="cbadge cbadge-kind">paragraph</span>
+          </div>
+        </div>
+        <div class="comp-right">
+          <button class="mini-btn" title="Highlight">&#9734;</button>
+          <button class="mini-btn" title="AI Suggest">&#10024;</button>
+        </div>
+      </div>
+
+      <div class="section-divider open">
+        <span class="section-arrow">&#9654;</span>
+        <span class="section-title">Endpoints</span>
+        <span class="section-line"></span>
+        <span class="section-badge">8</span>
+      </div>
+
+      <div class="comp">
+        <div>
+          <div class="comp-text">
+            POST /api/ingest/file accepts a JSON body with name, format, and content fields to create a new document
+            from text content.
+          </div>
+          <div class="comp-badge-row">
+            <span class="cbadge cbadge-kind">paragraph</span>
+            <span class="cbadge cbadge-a">1 note</span>
+          </div>
+        </div>
+        <div class="comp-right">
+          <button class="mini-btn" title="Highlight">&#9734;</button>
+          <button class="mini-btn" title="AI Suggest">&#10024;</button>
+        </div>
+      </div>
+
+      <div class="comp highlighted">
+        <div>
+          <div class="comp-text">
+            PATCH /api/components/:id updates the current text of a component and creates an audited revision record
+            with the previous text preserved.
+          </div>
+          <div class="comp-badge-row">
+            <span class="cbadge cbadge-kind">paragraph</span>
+          </div>
+        </div>
+        <div class="comp-right">
+          <button class="mini-btn" title="Highlight">&#9733;</button>
+          <button class="mini-btn" title="AI Suggest">&#10024;</button>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div>
+          <div class="comp-text">
+            POST /api/components/:id/ai-suggestions triggers the configured AI provider to generate a proposed text
+            revision for the specified component.
+          </div>
+          <div class="comp-badge-row">
+            <span class="cbadge cbadge-kind">paragraph</span>
+            <span class="cbadge cbadge-ai">2 proposals</span>
+          </div>
+        </div>
+        <div class="comp-right">
+          <button class="mini-btn" title="Highlight">&#9734;</button>
+          <button class="mini-btn" title="AI Suggest">&#10024;</button>
+        </div>
+      </div>
+
+      <div class="section-divider">
+        <span class="section-arrow">&#9654;</span>
+        <span class="section-title">Error Handling</span>
+        <span class="section-line"></span>
+        <span class="section-badge">3</span>
+      </div>
+
+      <div class="section-divider">
+        <span class="section-arrow">&#9654;</span>
+        <span class="section-title">Versioning</span>
+        <span class="section-line"></span>
+        <span class="section-badge">3</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- REVIEW PANEL -->
+  <aside class="review-panel">
+    <div class="rp-header">
+      <h2>Component Detail</h2>
+      <span class="rp-kind">heading &middot; overview</span>
+    </div>
+
+    <div class="rp-tabs">
+      <button class="rp-tab active">Edit</button>
+      <button class="rp-tab">Notes <span class="rp-tab-count">2</span></button>
+      <button class="rp-tab">Evidence</button>
+      <button class="rp-tab">AI <span class="rp-tab-count">1</span></button>
+    </div>
+
+    <div class="rp-scroll">
+      <!-- EDIT TAB -->
+      <div class="rp-section">
+        <div class="rp-label">Current Text</div>
+        <textarea class="rp-text-editor" rows="4">The artifact review API exposes a RESTful interface for document ingestion, component-level editing, and structured review workflows with full audit provenance.</textarea>
+        <div class="rp-editor-actions">
+          <span class="rp-unsaved">Unsaved draft</span>
+          <div class="rp-btn-group">
+            <button class="btn btn-sm">Save Draft</button>
+            <button class="btn btn-sm" style="color:var(--purple); border-color: #d0c4e6;">AI Suggest</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTES INLINE -->
+      <div class="rp-section">
+        <div class="rp-label">Annotations (2)</div>
+        <div class="note-card">
+          <div class="note-text">Verify that the "full audit provenance" claim is accurate given the current task_runs schema.</div>
+          <div class="note-meta">Jun 12, 2026</div>
+        </div>
+        <div class="note-card">
+          <div class="note-text">Consider splitting this into two sentences for clarity.</div>
+          <div class="note-meta">Jun 11, 2026</div>
+        </div>
+        <div class="add-input-row">
+          <input type="text" placeholder="Add annotation...">
+          <button class="btn btn-sm">Add</button>
+        </div>
+      </div>
+
+      <div class="rp-section">
+        <div class="rp-label">Questions</div>
+        <div style="font-size:12px; color:var(--text-3); padding: 6px 0;">No open questions.</div>
+        <div class="add-input-row">
+          <input type="text" placeholder="Add question...">
+          <button class="btn btn-sm">Add</button>
+        </div>
+      </div>
+
+      <div class="rp-section">
+        <div class="rp-label">Evidence</div>
+        <div class="evidence-row">
+          <span class="evidence-kind">Link</span>
+          <span class="evidence-val">docs/api-contract.md#L12</span>
+        </div>
+        <div class="add-input-row">
+          <select style="width:80px; padding:5px 6px; border:1px solid var(--border); border-radius:var(--r); font:inherit; font-size:12px;">
+            <option>link</option>
+            <option>source</option>
+            <option>repo_path</option>
+            <option>note</option>
+          </select>
+          <input type="text" placeholder="Value...">
+          <button class="btn btn-sm">Add</button>
+        </div>
+      </div>
+
+      <!-- AI SUGGESTION -->
+      <div class="rp-section">
+        <div class="rp-label">AI Suggestions (1)</div>
+        <div class="rp-ai-card">
+          <div class="rp-ai-header">
+            <span class="rp-ai-status">Proposed</span>
+            <div class="rp-ai-conf">
+              <span>87%</span>
+              <div class="conf-track"><div class="conf-fill" style="width:87%"></div></div>
+            </div>
+          </div>
+          <div class="rp-ai-body">
+            <div class="rp-ai-proposed">
+              The artifact review API provides a RESTful interface for document ingestion, component-level editing, and
+              structured review workflows. Every mutation creates an audited revision with full provenance tracking.
+            </div>
+            <div class="rp-ai-rationale">
+              Split the compound sentence for readability and made the audit provenance claim more specific.
+            </div>
+          </div>
+          <div class="rp-ai-prov">
+            <div class="prov-item"><span class="prov-label">Provider</span><br><span class="prov-value">anthropic</span></div>
+            <div class="prov-item"><span class="prov-label">Model</span><br><span class="prov-value">claude-sonnet-4-6</span></div>
+            <div class="prov-item"><span class="prov-label">Latency</span><br><span class="prov-value">1,240 ms</span></div>
+            <div class="prov-item"><span class="prov-label">Prompt</span><br><span class="prov-value">suggest-v1</span></div>
+            <div class="prov-item"><span class="prov-label">External</span><br><span class="prov-value">Yes</span></div>
+            <div class="prov-item"><span class="prov-label">Validation</span><br><span class="prov-value">passed</span></div>
+          </div>
+          <div class="rp-ai-actions">
+            <button class="btn btn-sm btn-reject">Reject</button>
+            <button class="btn btn-sm btn-accept">Accept</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- STATUS BAR -->
+  <div class="statusbar">
+    <div class="status-left">
+      <span class="status-dot"></span>
+      <span>Autosaved 2 min ago</span>
+    </div>
+    <div class="status-right">
+      <span>Workflow: artifact-review 0.1.0</span>
+      <span>Provider: anthropic/claude-sonnet-4-6</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

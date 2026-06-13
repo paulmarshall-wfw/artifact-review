@@ -9,8 +9,8 @@ Artifact Review uses a local TypeScript service as the only HTTP API boundary fo
 | `GET` | `/health` | Returns liveness, service name, and version. |
 | `GET` | `/ready` | Checks database connectivity and returns `200` when ready or `503` when not ready. |
 | `GET` | `/api/setup-readiness` | Combines database, provider, and workflow readiness checks. |
-| `GET` | `/api/provider-readiness` | Reports registry/profile/task/schema/fallback/demo readiness. |
-| `GET` | `/api/provider-readiness/tasks/:taskKey` | Reports provider readiness in the context of a task key. |
+| `GET` | `/api/provider-readiness` | Reports registry/profile/task/schema/fallback/demo readiness plus the current invocation summary for the default provider-backed task. |
+| `GET` | `/api/provider-readiness/tasks/:taskKey` | Reports provider readiness in the context of a task key, including selected provider/profile/adapter, prompt version, demo mode, and `externalSend`. |
 | `GET` | `/api/provider-settings` | Returns effective provider runtime settings and whether each value came from saved app settings, environment bootstrap, or neither. |
 | `PUT` | `/api/provider-settings` | Saves non-secret provider runtime settings: registry URL, selected profile key, and explicit deterministic demo mode. Requires `DATABASE_URL`. |
 | `GET` | `/api/workflow/status` | Returns active document workflow status, active workflow summary, and workflow readiness. |
@@ -29,7 +29,7 @@ Artifact Review uses a local TypeScript service as the only HTTP API boundary fo
 | `PATCH` | `/api/components/:componentId/highlight` | Enables or disables component highlight state and records an autosave snapshot. |
 | `POST` | `/api/documents/:documentId/save` | Promotes current reviewed state to a new durable document version while preserving the imported source snapshot. |
 | `POST` | `/api/documents/:documentId/export` | Builds same-format reviewed output for `txt`, `md`, `html`, `htm`, and URL snapshots; optionally writes a JSON review bundle beside the export. If `destinationPath` is supplied, the service writes local files and returns paths. Otherwise it returns downloadable content. |
-| `POST` | `/api/components/:componentId/ai-suggestions` | Blocks when provider readiness fails; invokes `suggest-component-revision` through `invoke-providers-for-tasks`, validates structured output, writes a task run, and stores a proposed `ai_suggestions` record without mutating component text. Explicit deterministic demo mode uses the same invocation path with a local deterministic adapter. |
+| `POST` | `/api/components/:componentId/ai-suggestions` | Blocks when task-specific provider readiness fails; invokes `suggest-component-revision` through the service-owned provider runtime facade, validates structured output, writes a task run, and stores a proposed `ai_suggestions` record without mutating component text. Explicit deterministic demo mode uses the same invocation path with a local deterministic adapter. |
 | `POST` | `/api/ai-suggestions/:suggestionId/accept` | Accepts a proposed AI suggestion, updates component text, creates an audited `component_revisions` row with `edit_source = accepted_ai_suggestion`, marks the suggestion accepted, and writes an autosave snapshot. |
 | `POST` | `/api/ai-suggestions/:suggestionId/reject` | Rejects a proposed AI suggestion, preserves suggestion history, writes an autosave snapshot, and does not mutate component text or create a component revision. |
 | `GET` | `/api/task-runs/:taskRunId` | Returns repository-backed task-run provenance when present; otherwise returns `404 task_run_not_found`. |
@@ -46,7 +46,7 @@ These routes are reserved by the MVP plan and should be implemented incrementall
 
 ## Response Rules
 
-- Readiness responses use `{ ready: boolean, checks: ReadinessCheck[] }`.
+- Readiness responses use `{ ready: boolean, checks: ReadinessCheck[] }`. Provider readiness responses also include `taskKey` and an `invocation` summary so React can show the selected provider/profile/adapter, prompt version, demo mode, and `externalSend` before invocation.
 - Blocking setup failures should use `409` with a stable `error` code and a user-actionable message.
 - Unimplemented reserved behavior should use `501` with a stable `error` code.
 - Missing records should use `404` with the missing resource ID when safe.

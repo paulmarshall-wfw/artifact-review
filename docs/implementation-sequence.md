@@ -15,7 +15,7 @@ Completed:
 - Dependencies installed and lockfile generated.
 - Vite and Vitest patched to numbered non-vulnerable versions.
 - `npm run verify` passes.
-- Local service liveness is verified on `127.0.0.1:4793`; readiness returns expected setup blockers without local env configuration.
+- Local service liveness is verified on `127.0.0.1:4794`; readiness returns expected setup blockers without local env configuration.
 
 ## Build Slice 1: Persistence Foundation
 
@@ -112,10 +112,12 @@ Completed:
 - Route registry lookup through `@invoke-providers/client`.
 - Route `suggest-component-revision` through `invoke-providers-for-tasks` core invocation, registered adapters, structured output validation, and app-owned hook/task-run persistence.
 - Keep deterministic demo mode on the same invocation path with a local deterministic adapter.
+- Add a service-owned provider runtime facade so readiness, invocation summaries, render-slot action derivation, invocation, task-run persistence, and task-run detail flow through one Artifact Review boundary.
 
 Remaining:
 
 - Validate a live registry/provider profile with a local secret reference against real provider adapter execution.
+- Keep future provider-backed tasks behind `TargetAppRuntimeService` or `RegistryBackedInvokeProvidersClient` from `@invoke-providers/client` before exposing additional render slots. Low-level `@invoke-providers/core.invokeTask` is acceptable only inside the shared client/runtime helper path, not as endpoint-specific plumbing. React must render task-specific readiness and `externalSend` at the invocation point, and provider output must remain proposed until an explicit accept/reject user action.
 
 ## Build Slice 6: Export
 

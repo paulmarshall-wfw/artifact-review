@@ -50,10 +50,20 @@ describePostgres("Postgres persistence integration", () => {
       [schemaName]
     );
 
-    expect(firstRun.applied).toEqual(["001_initial_schema.sql", "002_review_and_provider_records.sql"]);
+    expect(firstRun.applied).toEqual([
+      "001_initial_schema.sql",
+      "002_review_and_provider_records.sql",
+      "003_provider_task_assets.sql",
+      "004_block_future_provider_task_hooks.sql"
+    ]);
     expect(firstRun.skipped).toEqual([]);
     expect(secondRun.applied).toEqual([]);
-    expect(secondRun.skipped).toEqual(["001_initial_schema.sql", "002_review_and_provider_records.sql"]);
+    expect(secondRun.skipped).toEqual([
+      "001_initial_schema.sql",
+      "002_review_and_provider_records.sql",
+      "003_provider_task_assets.sql",
+      "004_block_future_provider_task_hooks.sql"
+    ]);
     expect(tables.rows.map((row) => row.table_name)).toEqual(
       expect.arrayContaining([
         "schema_migrations",

@@ -111,4 +111,25 @@ describe("provider readiness", () => {
     expect(readiness.checks.find((check) => check.key === "adapter-availability")?.ready).toBe(true);
     expect(readiness.checks.find((check) => check.key === "provider-capability")?.ready).toBe(true);
   });
+
+  it("blocks seeded future tasks until their host hook is actually implemented", () => {
+    const config = loadConfig({
+      ARTIFACT_REVIEW_DEMO_PROVIDER_MODE: "true"
+    });
+    const futureTaskAsset: ProviderTaskAsset = {
+      ...suggestTaskAsset,
+      taskKey: "draft-review-note",
+      renderSlot: "component.drawer.noteDraft",
+      hookKey: "store-draft-review-note",
+      hookImplementationKey: "unimplemented:store-draft-review-note"
+    };
+
+    const readiness = buildProviderReadiness(config, {}, {
+      taskKey: "draft-review-note",
+      taskAsset: futureTaskAsset
+    });
+
+    expect(readiness.ready).toBe(false);
+    expect(readiness.checks.find((check) => check.key === "processing-hook")?.ready).toBe(false);
+  });
 });

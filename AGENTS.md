@@ -33,9 +33,9 @@ Prefer explicit user intent over convenience defaults. Defaults may suggest valu
 
 ## Runtime Notes
 
-- Local app URL: `http://127.0.0.1:5182`
-- API or service port: `127.0.0.1:4793`
-- Registered local ports: Artifact Review Tauri/Vite UI `5182`; Artifact Review local TypeScript service `4793`; shared local Postgres dependency `5432`.
+- Local app URL: `http://127.0.0.1:5184`
+- API or service port: `127.0.0.1:4794`
+- Registered local ports: Artifact Review Tauri/Vite UI `5184`; Artifact Review local TypeScript service `4794`; shared local Postgres dependency `5432`.
 - Data directory: none established yet.
 - Important environment variables: `DATABASE_URL`, `ARTIFACT_REVIEW_SERVICE_HOST`, `ARTIFACT_REVIEW_SERVICE_PORT`, `VITE_ARTIFACT_REVIEW_API_BASE`, `INVOKE_PROVIDERS_REGISTRY_URL`, `INVOKE_PROVIDERS_PROFILE`, `ARTIFACT_REVIEW_DEMO_PROVIDER_MODE`, `LOG_LEVEL`.
 - External services: configured Postgres, shared invoke-providers registry service, local secret mechanism for raw provider secrets.
@@ -79,4 +79,3 @@ python3 "/Users/paulmarshall/Software Development/All Standards/scripts/check-lo
 - Keep changes scoped to the requested work.
 - Do not commit, tag, release, publish, install dependencies, or delete files unless the user explicitly asks.
 - Report verification performed and any verification that could not be run.
-

@@ -64,8 +64,8 @@ npm run doctor
 
 ## Local Ports
 
-- UI: `http://127.0.0.1:5182`
-- Local service: `http://127.0.0.1:4793`
+- UI: `http://127.0.0.1:5184`
+- Local service: `http://127.0.0.1:4794`
 - Shared local Postgres dependency: `localhost:5432`
 
 Before changing ports, update `/Users/paulmarshall/Software Development/All Standards/local-port-registry.md`.

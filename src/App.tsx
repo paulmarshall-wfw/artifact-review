@@ -12,8 +12,10 @@ import {
   getDocumentDetail,
   getDocumentWorkflowActions,
   getProviderReadiness,
+  getProviderReadinessForTask,
   getProviderSettings,
   getSetupReadiness,
+  getTaskRun,
   getWorkflowStatus,
   ingestFile,
   ingestUrl,
@@ -34,12 +36,14 @@ import {
   type ProviderReadiness,
   type ProviderSettings,
   type SetupReadiness,
+  type TaskRun,
   type WorkflowStatus,
   type WorkflowValidationResult
 } from "./lib/api";
 import { isTauriRuntime, revealExportedFile, selectExportDestination } from "./lib/tauri";
 
 const fixtureDefinition = workflowFixture as unknown;
+const suggestComponentRevisionTaskKey = "suggest-component-revision";
 const defaultFileContent =
   "Paste or type text for review. Each sentence becomes a review component. Add enough content to make the workspace useful.";
 
@@ -97,6 +101,7 @@ type ComponentSection = {
 export function App() {
   const [setupReadiness, setSetupReadiness] = useState<SetupReadiness | null>(null);
   const [providerReadiness, setProviderReadiness] = useState<ProviderReadiness | null>(null);
+  const [suggestionReadiness, setSuggestionReadiness] = useState<(ProviderReadiness & { taskKey: string }) | null>(null);
   const [providerSettings, setProviderSettings] = useState<ProviderSettings | null>(null);
   const [providerSettingsForm, setProviderSettingsForm] = useState<ProviderSettingsForm>({
     registryUrl: "",
@@ -128,6 +133,7 @@ export function App() {
   });
   const [includeReviewBundle, setIncludeReviewBundle] = useState(false);
   const [lastAutosave, setLastAutosave] = useState<AutosaveSnapshot | null>(null);
+  const [taskRunsById, setTaskRunsById] = useState<Record<string, TaskRun>>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Set<PendingKey>>(() => new Set());
@@ -214,6 +220,8 @@ export function App() {
 
   const latestVersion = documentDetail?.versions.at(-1) ?? null;
   const ingestBlocked = !workflowStatus?.active;
+  const suggestionInvocation = suggestionReadiness?.invocation ?? null;
+  const suggestionReady = Boolean(suggestionReadiness?.ready);
   const isPending = useCallback((key: PendingKey) => pending.has(key), [pending]);
 
   const runPending = useCallback(async <T,>(key: PendingKey, action: () => Promise<T>): Promise<T> => {
@@ -230,15 +238,17 @@ export function App() {
   }, []);
 
   const refreshGlobal = useCallback(async () => {
-    const [setup, provider, settings, workflow, documentList] = await Promise.all([
+    const [setup, provider, suggestionProvider, settings, workflow, documentList] = await Promise.all([
       getSetupReadiness(),
       getProviderReadiness(),
+      getProviderReadinessForTask(suggestComponentRevisionTaskKey),
       getProviderSettings(),
       getWorkflowStatus(),
       listDocuments()
     ]);
     setSetupReadiness(setup);
     setProviderReadiness(provider);
+    setSuggestionReadiness(suggestionProvider);
     setProviderSettings(settings);
     setProviderSettingsForm({
       registryUrl: settings.registryUrl,
@@ -250,15 +260,29 @@ export function App() {
     setSelectedDocumentId((current) => current ?? documentList.documents[0]?.id ?? null);
   }, []);
 
-  const refreshDetail = useCallback(
-    async (documentId: string) => {
-      const [detail, actions] = await Promise.all([
-        getDocumentDetail(documentId),
-        getDocumentWorkflowActions(documentId).catch(() => null)
-      ]);
-      setDocumentDetail(detail);
-      setDocumentActions(actions);
-      setSelectedComponentId((current) => {
+	  const refreshDetail = useCallback(
+	    async (documentId: string) => {
+	      const [detail, actions] = await Promise.all([
+	        getDocumentDetail(documentId),
+	        getDocumentWorkflowActions(documentId).catch(() => null)
+	      ]);
+	      const taskRunIds = Array.from(
+	        new Set(detail.review.aiSuggestions.map((suggestion) => suggestion.taskRunId).filter(isString))
+	      );
+	      const taskRunEntries = await Promise.all(
+	        taskRunIds.map(async (taskRunId) => {
+	          try {
+	            const response = await getTaskRun(taskRunId);
+	            return [taskRunId, response.taskRun] as const;
+	          } catch {
+	            return null;
+	          }
+	        })
+	      );
+	      setDocumentDetail(detail);
+	      setDocumentActions(actions);
+	      setTaskRunsById(Object.fromEntries(taskRunEntries.filter(isTaskRunEntry)));
+	      setSelectedComponentId((current) => {
         const currentExists = detail.components.some((component) => component.id === current);
         return currentExists ? current : detail.components[0]?.id ?? null;
       });
@@ -333,6 +357,7 @@ export function App() {
     );
     setProviderSettings(response.settings);
     setProviderReadiness(response.readiness);
+    setSuggestionReadiness(await getProviderReadinessForTask(suggestComponentRevisionTaskKey));
     setProviderSettingsForm({
       registryUrl: response.settings.registryUrl,
       selectedProviderProfileKey: response.settings.selectedProviderProfileKey,
@@ -538,7 +563,8 @@ export function App() {
 
     setError(null);
     const response = await runPending("ai-suggest", () => suggestComponentRevision(selectedComponent.id));
-    setProviderReadiness(response.readiness);
+    setSuggestionReadiness({ ...response.readiness, taskKey: suggestComponentRevisionTaskKey });
+    setTaskRunsById((current) => ({ ...current, [response.taskRun.id]: response.taskRun }));
     await refreshDetail(selectedDocumentId);
     setNotice(`Stored proposed suggestion ${response.suggestion.id}.`);
   }
@@ -1108,70 +1134,75 @@ export function App() {
                   <button disabled={isPending("edit")} onClick={() => reportActionError(handleComponentEdit)}>
                     {isPending("edit") ? "Autosaving" : "Autosave Text"}
                   </button>
-                  <button
-                    disabled={!providerReadiness?.ready || isPending("ai-suggest")}
-                    title={providerReadiness?.ready ? "Create a proposed AI suggestion" : providerBlocker(providerReadiness)}
-                    onClick={() => reportActionError(handleSuggestComponentRevision)}
-                  >
-                    {isPending("ai-suggest") ? "Suggesting" : "AI Suggest"}
-                  </button>
-                </div>
+	                  <button
+	                    disabled={!suggestionReady || isPending("ai-suggest")}
+	                    title={suggestionReady ? "Create a proposed AI suggestion" : providerBlocker(suggestionReadiness)}
+	                    onClick={() => reportActionError(handleSuggestComponentRevision)}
+	                  >
+	                    {isPending("ai-suggest") ? "Suggesting" : "AI Suggest"}
+	                  </button>
+	                </div>
+	                <InvocationSummary readiness={suggestionReadiness} summary={suggestionInvocation} />
 
-                <div className="suggestion-panel">
-                  <div className="suggestion-heading">
-                    <h3>AI Suggestions</h3>
-                    <StatusPill
-                      item={{
-                        key: "provider-suggestions",
-                        label: "Provider",
-                        ready: Boolean(providerReadiness?.ready),
-                        reason: providerBlocker(providerReadiness)
-                      }}
-                    />
-                  </div>
+	                <div className="suggestion-panel">
+	                  <div className="suggestion-heading">
+	                    <h3>AI Suggestions</h3>
+	                    <StatusPill
+	                      item={{
+	                        key: "provider-suggestions",
+	                        label: "Provider",
+	                        ready: suggestionReady,
+	                        reason: providerBlocker(suggestionReadiness)
+	                      }}
+	                    />
+	                  </div>
                   {suggestionsForComponent.length === 0 ? (
                     <p className="muted compact">No proposed suggestions for this component.</p>
                   ) : (
                     <div className="suggestion-list">
-                      {suggestionsForComponent.map((suggestion) => (
-                        <article className="suggestion-card" key={suggestion.id}>
-                          <div className="suggestion-heading">
-                            <strong>{suggestion.status}</strong>
-                            <span>{Math.round(suggestion.confidence * 100)}%</span>
-                          </div>
-                          <p>{suggestion.proposedText}</p>
-                          <small>{suggestion.rationale}</small>
-                          {Array.isArray(suggestion.warnings) && suggestion.warnings.length > 0 ? (
-                            <small>Warnings: {suggestion.warnings.join(", ")}</small>
-                          ) : null}
-                          <small>
-                            Task run {suggestion.taskRunId ?? "not recorded"} · {formatDateTime(suggestion.createdAt)}
-                          </small>
-                          {suggestion.decidedAt ? <small>Decided {formatDateTime(suggestion.decidedAt)}</small> : null}
-                          {suggestion.status === "proposed" ? (
-                            <div className="suggestion-actions">
-                              <button
-                                className="primary-button"
-                                disabled={selectedDraftChanged || isPending("ai-suggestion-action")}
-                                title={
-                                  selectedDraftChanged
-                                    ? "Save or discard the text draft before accepting this suggestion."
-                                    : "Accept this suggestion and create an audited revision."
-                                }
-                                onClick={() => reportActionError(() => handleAcceptSuggestion(suggestion.id))}
-                              >
-                                Accept
-                              </button>
-                              <button
-                                disabled={isPending("ai-suggestion-action")}
-                                onClick={() => reportActionError(() => handleRejectSuggestion(suggestion.id))}
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          ) : null}
-                        </article>
-                      ))}
+	                      {suggestionsForComponent.map((suggestion) => {
+	                        const taskRun = suggestion.taskRunId ? taskRunsById[suggestion.taskRunId] : undefined;
+	                        return (
+	                          <article className="suggestion-card" key={suggestion.id}>
+	                            <div className="suggestion-heading">
+	                              <strong>{suggestion.status}</strong>
+	                              <span>{Math.round(suggestion.confidence * 100)}%</span>
+	                            </div>
+	                            <p>{suggestion.proposedText}</p>
+	                            <small>{suggestion.rationale}</small>
+	                            {Array.isArray(suggestion.warnings) && suggestion.warnings.length > 0 ? (
+	                              <small>Warnings: {suggestion.warnings.join(", ")}</small>
+	                            ) : null}
+	                            <TaskRunProvenance taskRun={taskRun} taskRunId={suggestion.taskRunId} />
+	                            <small>
+	                              Created {formatDateTime(suggestion.createdAt)}
+	                            </small>
+	                            {suggestion.decidedAt ? <small>Decided {formatDateTime(suggestion.decidedAt)}</small> : null}
+	                            {suggestion.status === "proposed" ? (
+	                              <div className="suggestion-actions">
+	                                <button
+	                                  className="primary-button"
+	                                  disabled={selectedDraftChanged || isPending("ai-suggestion-action")}
+	                                  title={
+	                                    selectedDraftChanged
+	                                      ? "Save or discard the text draft before accepting this suggestion."
+	                                      : "Accept this suggestion and create an audited revision."
+	                                  }
+	                                  onClick={() => reportActionError(() => handleAcceptSuggestion(suggestion.id))}
+	                                >
+	                                  Accept
+	                                </button>
+	                                <button
+	                                  disabled={isPending("ai-suggestion-action")}
+	                                  onClick={() => reportActionError(() => handleRejectSuggestion(suggestion.id))}
+	                                >
+	                                  Reject
+	                                </button>
+	                              </div>
+	                            ) : null}
+	                          </article>
+	                        );
+	                      })}
                     </div>
                   )}
                 </div>
@@ -1322,6 +1353,108 @@ function RecordList({ emptyLabel, records }: { emptyLabel: string; records: stri
   );
 }
 
+function InvocationSummary({
+  readiness,
+  summary
+}: {
+  readiness: ProviderReadiness | null;
+  summary: ProviderReadiness["invocation"] | null;
+}) {
+  if (!summary) {
+    return (
+      <div className="invocation-summary blocked">
+        <span>AI Suggest task</span>
+        <strong>{providerBlocker(readiness) ?? "Not configured"}</strong>
+      </div>
+    );
+  }
+
+  return (
+    <div className={summary.demoMode ? "invocation-summary demo" : "invocation-summary"}>
+      <div>
+        <span>Provider</span>
+        <strong>{summary.providerDisplayName ?? summary.providerKey ?? "Not selected"}</strong>
+      </div>
+      <div>
+        <span>Profile</span>
+        <strong>{summary.providerProfileKey ?? "Not configured"}</strong>
+      </div>
+      <div>
+        <span>Adapter</span>
+        <strong>{summary.adapterKey ?? "Unavailable"}</strong>
+      </div>
+      <div>
+        <span>Prompt</span>
+        <strong>{summary.promptVersion ?? "Missing"}</strong>
+      </div>
+      <div>
+        <span>External send</span>
+        <strong>{summary.externalSend ? "Yes" : "No"}</strong>
+      </div>
+      <div>
+        <span>Selection</span>
+        <strong>{summary.demoMode ? "Demo mode" : summary.selectionMode}</strong>
+      </div>
+      {summary.model ? (
+        <div>
+          <span>Model</span>
+          <strong>{summary.model}</strong>
+        </div>
+      ) : null}
+      <p>{summary.readinessBlocker ?? summary.selectionNote}</p>
+    </div>
+  );
+}
+
+function TaskRunProvenance({ taskRun, taskRunId }: { taskRun?: TaskRun; taskRunId: string | null }) {
+  if (!taskRun) {
+    return <small>Task run {taskRunId ?? "not recorded"}</small>;
+  }
+
+  const model = readTaskRunModel(taskRun);
+  const failureReason = readTaskRunFailureReason(taskRun);
+
+  return (
+    <div className="task-run-detail">
+      <div>
+        <span>Task run</span>
+        <strong>{taskRun.id}</strong>
+      </div>
+      <div>
+        <span>Provider</span>
+        <strong>{taskRun.providerKey ?? "Not recorded"}</strong>
+      </div>
+      <div>
+        <span>Profile</span>
+        <strong>{taskRun.providerProfileKey ?? "Not recorded"}</strong>
+      </div>
+      <div>
+        <span>Prompt</span>
+        <strong>{taskRun.promptVersion}</strong>
+      </div>
+      <div>
+        <span>Validation</span>
+        <strong>{taskRun.validationStatus ?? "Not recorded"}</strong>
+      </div>
+      <div>
+        <span>Latency</span>
+        <strong>{typeof taskRun.latencyMs === "number" ? `${taskRun.latencyMs} ms` : "Not recorded"}</strong>
+      </div>
+      <div>
+        <span>External send</span>
+        <strong>{taskRun.externalSend ? "Yes" : "No"}</strong>
+      </div>
+      {model ? (
+        <div>
+          <span>Model</span>
+          <strong>{model}</strong>
+        </div>
+      ) : null}
+      {failureReason ? <p>{failureReason}</p> : null}
+    </div>
+  );
+}
+
 function providerBlocker(readiness: ProviderReadiness | null) {
   if (!readiness || readiness.ready) {
     return undefined;
@@ -1345,4 +1478,41 @@ function formatDateTime(value: string) {
     dateStyle: "medium",
     timeStyle: "short"
   }).format(new Date(value));
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+function isTaskRunEntry(value: (readonly [string, TaskRun]) | null): value is readonly [string, TaskRun] {
+  return Boolean(value);
+}
+
+function readTaskRunModel(taskRun: TaskRun): string | null {
+  return readNestedString(taskRun.provenance, ["invokeProviderTaskRun", "model"]);
+}
+
+function readTaskRunFailureReason(taskRun: TaskRun): string | null {
+  return (
+    readNestedString(taskRun.provenance, ["invokeProviderTaskRun", "errorMessage"]) ??
+    readNestedString(taskRun.provenance, ["invokeProviderTaskRun", "readinessReasons", "0", "message"])
+  );
+}
+
+function readNestedString(value: unknown, path: string[]): string | null {
+  let current = value;
+  for (const segment of path) {
+    if (Array.isArray(current)) {
+      const index = Number(segment);
+      current = Number.isInteger(index) ? current[index] : undefined;
+      continue;
+    }
+
+    if (!current || typeof current !== "object") {
+      return null;
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+
+  return typeof current === "string" && current.trim() ? current : null;
 }

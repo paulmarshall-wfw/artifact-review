@@ -13,7 +13,26 @@ export type ReadinessResponse = {
 };
 
 export type SetupReadiness = ReadinessResponse;
-export type ProviderReadiness = ReadinessResponse;
+export type ProviderInvocationSummary = {
+  taskKey: string;
+  renderSlot: string | null;
+  providerKey: string | null;
+  providerDisplayName: string | null;
+  providerProfileKey: string | null;
+  providerProfileSource: "saved" | "env" | "none";
+  adapterKey: string | null;
+  model: string | null;
+  externalSend: boolean;
+  promptVersion: string | null;
+  demoMode: boolean;
+  selectionMode: "task-provider" | "profile-capability" | "demo" | "none";
+  selectionNote: string;
+  readinessBlocker: string | null;
+};
+export type ProviderReadiness = ReadinessResponse & {
+  taskKey?: string;
+  invocation?: ProviderInvocationSummary | null;
+};
 
 export type ProviderSettings = {
   registryUrl: string;
@@ -395,6 +414,10 @@ export async function saveProviderSettings(payload: ProviderSettingsSaveRequest)
 
 export async function getProviderReadinessForTask(taskKey: string): Promise<ProviderReadiness & { taskKey: string }> {
   return requestJson<ProviderReadiness & { taskKey: string }>(`/api/provider-readiness/tasks/${encodeURIComponent(taskKey)}`);
+}
+
+export async function getTaskRun(taskRunId: string): Promise<{ taskRun: TaskRun }> {
+  return requestJson<{ taskRun: TaskRun }>(`/api/task-runs/${encodeURIComponent(taskRunId)}`);
 }
 
 export async function getWorkflowStatus(): Promise<WorkflowStatus> {

@@ -3,7 +3,7 @@ use std::process::Command;
 #[tauri::command]
 fn service_base_url() -> String {
     std::env::var("VITE_ARTIFACT_REVIEW_API_BASE")
-        .unwrap_or_else(|_| "http://127.0.0.1:4793".to_string())
+        .unwrap_or_else(|_| "http://127.0.0.1:4794".to_string())
 }
 
 #[tauri::command]

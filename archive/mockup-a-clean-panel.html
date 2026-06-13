@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup A: Clean Three-Panel Layout</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --border: #e2e6ed;
+    --border-light: #eef1f5;
+    --text-primary: #1a1f2b;
+    --text-secondary: #5f6b7a;
+    --text-muted: #8c95a4;
+    --accent: #3b6fd4;
+    --accent-light: #eef3fc;
+    --accent-hover: #2f5bb8;
+    --highlight-bg: #fef9ec;
+    --highlight-border: #f0d460;
+    --success: #1a8a4a;
+    --success-bg: #eaf6ef;
+    --warning: #b8660d;
+    --warning-bg: #fef5eb;
+    --danger: #c4321a;
+    --danger-bg: #fef1ee;
+    --radius: 8px;
+    --radius-sm: 5px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.08);
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text-primary); font-size: 14px; line-height: 1.5; }
+
+  /* === LAYOUT === */
+  .shell {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr) 340px;
+    height: 100vh;
+  }
+
+  /* === LEFT NAV === */
+  .nav-panel {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .nav-header {
+    padding: 16px 16px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .brand {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+
+  .brand-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .bucket-tabs {
+    display: flex;
+    gap: 1px;
+    background: var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .bucket-tab {
+    flex: 1;
+    padding: 10px 8px;
+    background: var(--surface);
+    border: none;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    text-align: center;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .bucket-tab:hover { background: var(--bg); }
+  .bucket-tab.active {
+    color: var(--accent);
+    box-shadow: inset 0 -2px 0 var(--accent);
+    background: var(--accent-light);
+  }
+
+  .bucket-count {
+    display: inline-block;
+    background: var(--bg);
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 10px;
+    padding: 1px 6px;
+    margin-left: 4px;
+  }
+
+  .bucket-tab.active .bucket-count {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .doc-search {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .doc-search input {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font: inherit;
+    font-size: 13px;
+    color: var(--text-primary);
+    background: var(--bg);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .doc-search input:focus {
+    border-color: var(--accent);
+  }
+
+  .doc-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+
+  .doc-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: background 0.12s;
+  }
+
+  .doc-item:hover { background: var(--bg); }
+  .doc-item.active {
+    background: var(--accent-light);
+    border-left-color: var(--accent);
+  }
+
+  .doc-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .doc-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 3px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .state-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
+
+  .state-badge.review {
+    background: var(--warning-bg);
+    color: var(--warning);
+  }
+
+  .state-badge.approved {
+    background: var(--success-bg);
+    color: var(--success);
+  }
+
+  .state-badge.draft {
+    background: var(--bg);
+    color: var(--text-muted);
+  }
+
+  .state-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* === CANVAS (CENTER) === */
+  .canvas {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .canvas-toolbar {
+    padding: 12px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .canvas-title-area h1 {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .canvas-title-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn {
+    padding: 7px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.12s;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .btn:hover { background: var(--bg); border-color: #c8cdd5; }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .btn-primary:hover { background: var(--accent-hover); }
+
+  .btn-sm {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .btn-ghost {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .btn-ghost:hover { background: var(--bg); }
+
+  .canvas-search {
+    padding: 8px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .canvas-search input {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font: inherit;
+    font-size: 13px;
+    background: var(--bg);
+    outline: none;
+  }
+
+  .canvas-search input:focus { border-color: var(--accent); }
+
+  .section-controls {
+    display: flex;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .section-controls button {
+    background: none;
+    border: none;
+    font: inherit;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  .section-controls button:hover { background: var(--accent-light); }
+
+  /* Component list */
+  .canvas-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+  }
+
+  .section-group {
+    margin-bottom: 16px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .section-chevron {
+    font-size: 10px;
+    color: var(--text-muted);
+    transition: transform 0.15s;
+    width: 16px;
+    text-align: center;
+  }
+
+  .section-header.expanded .section-chevron { transform: rotate(90deg); }
+
+  .section-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+  }
+
+  .section-count {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .component-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: border-color 0.12s, box-shadow 0.12s;
+    position: relative;
+  }
+
+  .component-card:hover {
+    border-color: #c0c8d3;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .component-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), var(--shadow-sm);
+  }
+
+  .component-card.highlighted {
+    border-left: 3px solid var(--highlight-border);
+    background: var(--highlight-bg);
+  }
+
+  .component-text {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+  }
+
+  .component-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .component-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .badge-kind {
+    background: var(--bg);
+    color: var(--text-muted);
+  }
+
+  .badge-annotations {
+    background: #e8f0fe;
+    color: #2a5db0;
+  }
+
+  .badge-questions {
+    background: #fef3e0;
+    color: #9b6b1a;
+  }
+
+  .badge-ai {
+    background: #f0e8fe;
+    color: #6b3fa0;
+  }
+
+  .component-actions {
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+
+  .component-card:hover .component-actions { opacity: 1; }
+
+  .icon-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    transition: background 0.1s, color 0.1s;
+  }
+
+  .icon-btn:hover { background: var(--bg); color: var(--text-primary); }
+
+  /* === INSPECTOR (RIGHT) === */
+  .inspector {
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .inspector-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .inspector-header h2 {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .inspector-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .inspector-tab {
+    flex: 1;
+    padding: 10px 8px;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-align: center;
+    transition: color 0.12s;
+    position: relative;
+  }
+
+  .inspector-tab:hover { color: var(--text-secondary); }
+  .inspector-tab.active {
+    color: var(--accent);
+  }
+
+  .inspector-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 12px;
+    right: 12px;
+    height: 2px;
+    background: var(--accent);
+    border-radius: 2px 2px 0 0;
+  }
+
+  .inspector-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+  }
+
+  .inspector-section {
+    margin-bottom: 18px;
+  }
+
+  .inspector-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .current-text-preview {
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-primary);
+    border: 1px solid var(--border-light);
+  }
+
+  .text-editor {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .text-editor:focus { border-color: var(--accent); }
+
+  .editor-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+  }
+
+  .editor-footer .unsaved {
+    font-size: 11px;
+    color: var(--warning);
+  }
+
+  .note-item {
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+
+  .note-item .note-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+
+  .add-note-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .add-note-row input,
+  .add-note-row textarea {
+    flex: 1;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font: inherit;
+    font-size: 13px;
+    outline: none;
+    resize: none;
+  }
+
+  /* AI Suggestion card */
+  .suggestion-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+
+  .suggestion-card-header {
+    padding: 10px 12px;
+    background: #faf8ff;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .suggestion-status {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b3fa0;
+  }
+
+  .confidence-bar {
+    width: 60px;
+    height: 5px;
+    background: var(--border-light);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .confidence-fill {
+    height: 100%;
+    background: #7c5cbf;
+    border-radius: 3px;
+  }
+
+  .suggestion-body {
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .suggestion-rationale {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+  }
+
+  .suggestion-actions {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border-light);
+    display: flex;
+    gap: 6px;
+  }
+
+  .btn-accept {
+    background: var(--success);
+    border-color: var(--success);
+    color: #fff;
+  }
+
+  .btn-reject {
+    color: var(--danger);
+    border-color: var(--danger);
+  }
+
+  .btn-reject:hover { background: var(--danger-bg); }
+
+  .provenance-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 12px;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+
+  .provenance-grid dt {
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+
+  .provenance-grid dd {
+    font-weight: 500;
+    color: var(--text-primary);
+    margin: 0 0 6px;
+  }
+
+  /* === GLOBAL === */
+  .divider { height: 1px; background: var(--border-light); margin: 12px 0; }
+
+  .status-bar {
+    padding: 6px 20px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .status-bar .autosave {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .status-bar .dot-green {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--success);
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- LEFT: Navigator -->
+  <nav class="nav-panel">
+    <div class="nav-header">
+      <div class="brand">Artifact Review</div>
+      <div class="brand-sub">v0.1.0 &middot; Workspace</div>
+    </div>
+
+    <div class="bucket-tabs">
+      <button class="bucket-tab active">Review <span class="bucket-count">3</span></button>
+      <button class="bucket-tab">Approved <span class="bucket-count">1</span></button>
+      <button class="bucket-tab">All <span class="bucket-count">5</span></button>
+    </div>
+
+    <div class="doc-search">
+      <input type="text" placeholder="Filter documents...">
+    </div>
+
+    <div class="doc-list">
+      <div class="doc-item active">
+        <div class="doc-title">API Contract Specification</div>
+        <div class="doc-meta">
+          <span class="state-badge review"><span class="state-dot"></span> Needs Review</span>
+          <span>md</span>
+          <span>12 min ago</span>
+        </div>
+      </div>
+      <div class="doc-item">
+        <div class="doc-title">Architecture Decision Record 004</div>
+        <div class="doc-meta">
+          <span class="state-badge review"><span class="state-dot"></span> In Review</span>
+          <span>html</span>
+          <span>1 hr ago</span>
+        </div>
+      </div>
+      <div class="doc-item">
+        <div class="doc-title">Data Model Reference</div>
+        <div class="doc-meta">
+          <span class="state-badge review"><span class="state-dot"></span> Needs Review</span>
+          <span>txt</span>
+          <span>3 hrs ago</span>
+        </div>
+      </div>
+      <div class="doc-item">
+        <div class="doc-title">Setup Readiness Checklist</div>
+        <div class="doc-meta">
+          <span class="state-badge approved"><span class="state-dot"></span> Approved</span>
+          <span>md</span>
+          <span>1 day ago</span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- CENTER: Canvas -->
+  <main class="canvas">
+    <div class="canvas-toolbar">
+      <div class="canvas-title-area">
+        <h1>API Contract Specification</h1>
+        <div class="canvas-title-meta">
+          <span class="state-badge review"><span class="state-dot"></span> Needs Review</span>
+          <span>18 components &middot; Version 3</span>
+          <span>&middot; Markdown</span>
+        </div>
+      </div>
+      <div class="toolbar-actions">
+        <button class="btn btn-sm">Start Review</button>
+        <button class="btn btn-sm">Approve</button>
+        <div style="width:1px; height:20px; background:var(--border); margin:0 4px;"></div>
+        <button class="btn btn-sm">Save</button>
+        <button class="btn btn-sm btn-primary">Export</button>
+      </div>
+    </div>
+
+    <div class="canvas-search">
+      <input type="text" placeholder="Search components by text, kind, or section...">
+      <div class="section-controls">
+        <button>Expand all</button>
+        <span>&middot;</span>
+        <button>Collapse all</button>
+      </div>
+    </div>
+
+    <div class="canvas-scroll">
+      <div class="section-group">
+        <div class="section-header expanded">
+          <span class="section-chevron">&#9654;</span>
+          <span class="section-label">Overview</span>
+          <span class="section-count">4 components</span>
+        </div>
+
+        <div class="component-card highlighted selected">
+          <div class="component-text">
+            The artifact review API exposes a RESTful interface for document ingestion, component-level editing, and
+            structured review workflows with full audit provenance.
+          </div>
+          <div class="component-footer">
+            <div class="component-badges">
+              <span class="badge badge-kind">heading</span>
+              <span class="badge badge-annotations">2 annotations</span>
+              <span class="badge badge-ai">1 AI proposal</span>
+            </div>
+            <div class="component-actions">
+              <button class="icon-btn" title="Highlight">&#9733;</button>
+              <button class="icon-btn" title="Annotate">&#9998;</button>
+              <button class="icon-btn" title="AI Suggest">&#10024;</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="component-card">
+          <div class="component-text">
+            All endpoints accept and return JSON. Authentication is handled by the surrounding infrastructure layer,
+            not by the review API itself.
+          </div>
+          <div class="component-footer">
+            <div class="component-badges">
+              <span class="badge badge-kind">paragraph</span>
+            </div>
+            <div class="component-actions">
+              <button class="icon-btn" title="Highlight">&#9734;</button>
+              <button class="icon-btn" title="Annotate">&#9998;</button>
+              <button class="icon-btn" title="AI Suggest">&#10024;</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="component-card">
+          <div class="component-text">
+            Documents are the top-level resource. Each document contains components, which are the reviewable units
+            of text extracted during ingestion.
+          </div>
+          <div class="component-footer">
+            <div class="component-badges">
+              <span class="badge badge-kind">paragraph</span>
+              <span class="badge badge-questions">1 question</span>
+            </div>
+            <div class="component-actions">
+              <button class="icon-btn" title="Highlight">&#9734;</button>
+              <button class="icon-btn" title="Annotate">&#9998;</button>
+              <button class="icon-btn" title="AI Suggest">&#10024;</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="component-card">
+          <div class="component-text">
+            The review surface supports annotations, open questions, evidence attachment, highlighting, and
+            AI-assisted revision suggestions with full task-run provenance.
+          </div>
+          <div class="component-footer">
+            <div class="component-badges">
+              <span class="badge badge-kind">paragraph</span>
+            </div>
+            <div class="component-actions">
+              <button class="icon-btn" title="Highlight">&#9734;</button>
+              <button class="icon-btn" title="Annotate">&#9998;</button>
+              <button class="icon-btn" title="AI Suggest">&#10024;</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-group">
+        <div class="section-header expanded">
+          <span class="section-chevron">&#9654;</span>
+          <span class="section-label">Endpoints</span>
+          <span class="section-count">8 components</span>
+        </div>
+
+        <div class="component-card">
+          <div class="component-text">
+            POST /api/ingest/file accepts a JSON body with name, format, and content fields to create a new document
+            from text content.
+          </div>
+          <div class="component-footer">
+            <div class="component-badges">
+              <span class="badge badge-kind">paragraph</span>
+              <span class="badge badge-annotations">1 annotation</span>
+            </div>
+            <div class="component-actions">
+              <button class="icon-btn" title="Highlight">&#9734;</button>
+              <button class="icon-btn" title="Annotate">&#9998;</button>
+              <button class="icon-btn" title="AI Suggest">&#10024;</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="component-card highlighted">
+          <div class="component-text">
+            PATCH /api/components/:id updates the current text of a component and creates an audited revision record
+            with the previous text preserved.
+          </div>
+          <div class="component-footer">
+            <div class="component-badges">
+              <span class="badge badge-kind">paragraph</span>
+            </div>
+            <div class="component-actions">
+              <button class="icon-btn" title="Highlight">&#9733;</button>
+              <button class="icon-btn" title="Annotate">&#9998;</button>
+              <button class="icon-btn" title="AI Suggest">&#10024;</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="component-card">
+          <div class="component-text">
+            POST /api/components/:id/ai-suggestions triggers the configured AI provider to generate a proposed text
+            revision for the specified component.
+          </div>
+          <div class="component-footer">
+            <div class="component-badges">
+              <span class="badge badge-kind">paragraph</span>
+              <span class="badge badge-ai">2 AI proposals</span>
+            </div>
+            <div class="component-actions">
+              <button class="icon-btn" title="Highlight">&#9734;</button>
+              <button class="icon-btn" title="Annotate">&#9998;</button>
+              <button class="icon-btn" title="AI Suggest">&#10024;</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-group">
+        <div class="section-header">
+          <span class="section-chevron">&#9654;</span>
+          <span class="section-label">Error Handling</span>
+          <span class="section-count">3 components</span>
+        </div>
+      </div>
+
+      <div class="section-group">
+        <div class="section-header">
+          <span class="section-chevron">&#9654;</span>
+          <span class="section-label">Versioning</span>
+          <span class="section-count">3 components</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <div class="autosave">
+        <span class="dot-green"></span>
+        Autosaved 2 min ago
+      </div>
+      <span>Workflow: artifact-review 0.1.0</span>
+    </div>
+  </main>
+
+  <!-- RIGHT: Inspector -->
+  <aside class="inspector">
+    <div class="inspector-header">
+      <h2>Component Detail</h2>
+      <button class="btn btn-sm btn-ghost">Close</button>
+    </div>
+
+    <div class="inspector-tabs">
+      <button class="inspector-tab active">Edit</button>
+      <button class="inspector-tab">Notes</button>
+      <button class="inspector-tab">AI</button>
+      <button class="inspector-tab">History</button>
+    </div>
+
+    <div class="inspector-scroll">
+      <div class="inspector-section">
+        <div class="inspector-section-label">Current Text</div>
+        <textarea class="text-editor" rows="5">The artifact review API exposes a RESTful interface for document ingestion, component-level editing, and structured review workflows with full audit provenance.</textarea>
+        <div class="editor-footer">
+          <span class="unsaved">Unsaved changes</span>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-sm">Autosave</button>
+            <button class="btn btn-sm" style="color: var(--accent);">AI Suggest</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="inspector-section">
+        <div class="inspector-section-label">Annotations (2)</div>
+        <div class="note-item">
+          <div>Verify that the "full audit provenance" claim is accurate given the current task_runs schema.</div>
+          <div class="note-meta">Jun 12, 2026</div>
+        </div>
+        <div class="note-item">
+          <div>Consider splitting this into two sentences for clarity.</div>
+          <div class="note-meta">Jun 11, 2026</div>
+        </div>
+        <div class="add-note-row">
+          <input type="text" placeholder="Add annotation...">
+          <button class="btn btn-sm">Add</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="inspector-section">
+        <div class="inspector-section-label">AI Suggestions</div>
+        <div class="suggestion-card">
+          <div class="suggestion-card-header">
+            <span class="suggestion-status">Proposed</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:12px; color:var(--text-muted);">87%</span>
+              <div class="confidence-bar"><div class="confidence-fill" style="width:87%"></div></div>
+            </div>
+          </div>
+          <div class="suggestion-body">
+            The artifact review API provides a RESTful interface for document ingestion, component-level editing, and
+            structured review workflows. Every mutation creates an audited revision with full provenance tracking.
+          </div>
+          <div class="suggestion-rationale">
+            Split the compound sentence for readability and made the audit provenance claim more specific.
+          </div>
+          <div class="suggestion-actions">
+            <button class="btn btn-sm btn-accept">Accept</button>
+            <button class="btn btn-sm btn-reject">Reject</button>
+          </div>
+        </div>
+
+        <div class="provenance-grid" style="padding: 0 4px;">
+          <dt>Provider</dt><dd>anthropic</dd>
+          <dt>Model</dt><dd>claude-sonnet-4-6</dd>
+          <dt>Latency</dt><dd>1,240 ms</dd>
+          <dt>External</dt><dd>Yes</dd>
+          <dt>Prompt</dt><dd>suggest-v1</dd>
+          <dt>Validation</dt><dd>passed</dd>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+</body>
+</html>

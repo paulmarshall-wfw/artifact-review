@@ -10,21 +10,16 @@ import { checkDatabase } from "../db/pool.js";
 import { combineReadiness } from "../domain/readiness.js";
 import { parseHtmlToComponents, parseMarkdownToComponents, parsePlainTextToComponents } from "../domain/parser.js";
 import {
-  buildProviderReadiness,
   resolveDemoProviderMode,
   resolveProviderRegistryUrl,
-  resolveSelectedProfileSelection,
-  selectProviderForTask
+  resolveSelectedProfileSelection
 } from "../providers/readiness.js";
-import { fetchRegistryLookup } from "../providers/registry.js";
 import {
-  getRegisteredProviderAdapterKeys,
-  invokeSuggestComponentRevision,
+  createArtifactReviewProviderRuntime,
   suggestComponentRevisionTaskKey
 } from "../providers/runtime.js";
 import type { DocumentSummary, ReviewComponent } from "../repositories/documents.js";
 import { createRepositories, type Repositories } from "../repositories/index.js";
-import type { ProviderTaskAsset } from "../repositories/providerTasks.js";
 import type { ReviewComponentForMutation } from "../repositories/review.js";
 import type { JsonValue } from "../repositories/types.js";
 import {
@@ -123,42 +118,6 @@ async function createMutationAutosave(
 
 async function getComponentForMutation(repositories: Repositories, componentId: string) {
   return repositories.review.getComponent(componentId);
-}
-
-async function buildProviderContext(
-  config: AppConfig,
-  repositories: Repositories | null,
-  taskKey: string = suggestComponentRevisionTaskKey
-) {
-  const settings = (await repositories?.appSettings.getProviderRuntimeSettings()) ?? {};
-  const selection = resolveSelectedProfileSelection(config, settings);
-  const registrySelection = resolveProviderRegistryUrl(config, settings);
-  const demoModeSelection = resolveDemoProviderMode(config, settings);
-  const taskAsset = repositories ? await repositories.providerTasks.getTaskAsset(taskKey) : null;
-  const registry =
-    !demoModeSelection.enabled && registrySelection.registryUrl && selection.profileKey
-      ? await fetchRegistryLookup(registrySelection.registryUrl, selection.profileKey)
-      : undefined;
-  const readiness = buildProviderReadiness(config, settings, {
-    taskKey,
-    taskAsset,
-    registry,
-    secretEnv: process.env,
-    registeredAdapterKeys: getRegisteredProviderAdapterKeys()
-  });
-  const provider = selectProviderForTask(registry?.providers ?? [], taskAsset);
-
-  return {
-    readiness,
-    selectedProfileKey: selection.profileKey,
-    selectedProfileSource: selection.source,
-    registryUrl: registrySelection.registryUrl,
-    registryUrlSource: registrySelection.source,
-    demoMode: demoModeSelection.enabled,
-    taskAsset,
-    registry,
-    provider
-  };
 }
 
 async function buildProviderSettingsResponse(config: AppConfig, repositories: Repositories | null) {
@@ -366,13 +325,13 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
   app.get("/api/setup-readiness", async (_request, response) => {
     const database = await checkDatabase(pool);
     const activeWorkflow = repositories ? await getActiveDocumentWorkflow(repositories) : null;
-    const provider = await buildProviderContext(config, repositories);
+    const provider = await createArtifactReviewProviderRuntime(config, repositories).getReadiness();
     const workflow = buildWorkflowReadiness(Boolean(activeWorkflow));
 
     response.json(
       combineReadiness([
         { key: "database", label: "Database", ready: database.ready, reason: database.reason },
-        ...provider.readiness.checks,
+        ...provider.checks,
         ...workflow.checks
       ])
     );
@@ -424,8 +383,7 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
   });
 
   app.get("/api/provider-readiness", async (_request, response) => {
-    const provider = await buildProviderContext(config, repositories);
-    response.json(provider.readiness);
+    response.json(await createArtifactReviewProviderRuntime(config, repositories).getReadiness());
   });
 
   app.get("/api/provider-settings", async (_request, response) => {
@@ -458,21 +416,17 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
 
     const [settings, provider] = await Promise.all([
       buildProviderSettingsResponse(config, repositories),
-      buildProviderContext(config, repositories)
+      createArtifactReviewProviderRuntime(config, repositories).getReadiness()
     ]);
 
     response.json({
       settings,
-      readiness: provider.readiness
+      readiness: provider
     });
   });
 
   app.get("/api/provider-readiness/tasks/:taskKey", async (request, response) => {
-    const provider = await buildProviderContext(config, repositories, request.params.taskKey);
-    response.json({
-      taskKey: request.params.taskKey,
-      ...provider.readiness
-    });
+    response.json(await createArtifactReviewProviderRuntime(config, repositories).getReadiness(request.params.taskKey));
   });
 
   app.get("/api/documents", async (_request, response) => {
@@ -1153,8 +1107,8 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       return;
     }
 
-    const providerContext = await buildProviderContext(config, repositories, suggestComponentRevisionTaskKey);
-    const readiness = providerContext.readiness;
+    const providerRuntime = createArtifactReviewProviderRuntime(config, repositories);
+    const readiness = await providerRuntime.getReadiness(suggestComponentRevisionTaskKey);
     if (!readiness.ready) {
       response.status(409).json({
         error: "provider_not_ready",
@@ -1173,14 +1127,7 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       return;
     }
 
-    const invocation = await invokeSuggestComponentRevision(repositories, component, {
-      taskAsset: providerContext.taskAsset,
-      provider: providerContext.provider,
-      selectedProfileKey: providerContext.selectedProfileKey,
-      selectedProfileSource: providerContext.selectedProfileSource,
-      registryProfileFound: Boolean(providerContext.registry?.profile),
-      demoMode: providerContext.demoMode
-    });
+    const invocation = await providerRuntime.invokeSuggestComponentRevision(component);
 
     if (!invocation.ok) {
       response.status(502).json({
@@ -1191,17 +1138,8 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       return;
     }
 
-    const suggestion = await repositories.aiSuggestions.createSuggestion({
-      componentId: component.id,
-      taskRunId: invocation.taskRun.id,
-      proposedText: invocation.output.proposedText,
-      rationale: invocation.output.rationale,
-      confidence: invocation.output.confidence,
-      warnings: invocation.output.warnings
-    });
-
     response.status(201).json({
-      suggestion,
+      suggestion: invocation.suggestion,
       taskRun: invocation.taskRun,
       output: invocation.output,
       readiness

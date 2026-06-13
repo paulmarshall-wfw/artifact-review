@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n service,ui \"npm run dev:service\" \"npm run dev:web\"",
-    "dev:web": "vite --host 127.0.0.1 --port 5182 --strictPort",
+    "dev:web": "vite --host 127.0.0.1 --port 5184 --strictPort",
     "dev:service": "tsx watch service/src/index.ts",
     "tauri:dev": "concurrently -k -n service,tauri \"npm run dev:service\" \"tauri dev\"",
     "build": "tsc -p tsconfig.json && vite build",

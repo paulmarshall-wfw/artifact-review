@@ -49,6 +49,16 @@ Append brief entries here when project work is completed. Keep this file concise
   Verification: `npm run verify` passed with 7 test files, 1 skipped Postgres suite, 28 tests passed, and 2 skipped; Vite production build passed.
   Traceability: Git branch `main` at `7e547b8`; no commit yet; changed `src/App.tsx`, `src/styles.css`, completed-task ledger, and handoff.
 
+- Task: Implement provider registry integration review compliance.
+  Outcome: Added a service-owned provider runtime facade for task-specific readiness, invocation summaries, render-slot action derivation, task-run detail, and proposal-only AI suggestion flow; blocked future provider-backed tasks behind the shared runtime/client boundary.
+  Verification: `npm run verify` passed with 10 test files, 1 skipped Postgres suite, 43 tests passed, and 2 skipped; Vite production build passed.
+  Traceability: Git branch `main` at `9edb45a`; no commit yet; changed provider runtime service code, provider readiness endpoints, task-run persistence, React API/UI, focused tests, migration `004_block_future_provider_task_hooks.sql`, API/setup/sequence docs, completed-task ledger, and handoff.
+
+- Task: Reserve unused local ports for Artifact Review.
+  Outcome: Reassigned the Artifact Review UI to `127.0.0.1:5184` and local service to `127.0.0.1:4794`, updated project config/docs, and reserved both ports in the shared local port registry.
+  Verification: Shared local port registry checker passed; `npm run verify` passed with 10 test files, 1 skipped Postgres suite, 43 tests passed, and 2 skipped; Vite production build passed; final live-port check found no listeners on `5184` or `4794`.
+  Traceability: Git branch `main` at `9edb45a`; no commit yet; changed `.env.example`, `AGENTS.md`, `README.md`, `package.json`, `vite.config.ts`, service/Tauri port defaults, setup/verification docs, and `/Users/paulmarshall/Software Development/All Standards/local-port-registry.md`.
+
 ## 2026-06-12
 
 - Task: Build React API wiring and workflow setup UI.
