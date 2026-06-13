@@ -2,6 +2,13 @@
 
 Append brief entries here when project work is completed. Keep this file concise and append-only.
 
+## 2026-06-13
+
+- Task: Build document ingest and review workspace UI slices.
+  Outcome: Added browser file selection for `txt`, `md`, `html`, and `htm` ingest, preserved URL snapshot ingest, kept ingest blocked until the backend reports an active workflow, and expanded the review workspace with component search, section grouping, expand/collapse controls, selected-component focus, inline detail/highlight controls, an open/closed detail drawer, visible autosave draft state, and backend-rendered workflow actions.
+  Verification: `npm run verify` passed with 7 test files, 1 skipped Postgres suite, 28 tests passed, and 2 skipped; Vite production build passed.
+  Traceability: Git branch `main` at `7e547b8`; no commit yet; changed `src/App.tsx`, `src/styles.css`, completed-task ledger, and handoff.
+
 ## 2026-06-12
 
 - Task: Build React API wiring and workflow setup UI.

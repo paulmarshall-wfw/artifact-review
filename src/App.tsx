@@ -38,6 +38,7 @@ type PendingKey =
   | "initial"
   | "workflow-validate"
   | "workflow-activate"
+  | "file-read"
   | "file-ingest"
   | "url-ingest"
   | "detail"
@@ -68,6 +69,12 @@ type ReviewNoteForm = {
   evidenceValue: string;
 };
 
+type ComponentSection = {
+  id: string;
+  label: string;
+  components: DocumentDetail["components"];
+};
+
 export function App() {
   const [setupReadiness, setSetupReadiness] = useState<SetupReadiness | null>(null);
   const [providerReadiness, setProviderReadiness] = useState<ProviderReadiness | null>(null);
@@ -78,6 +85,9 @@ export function App() {
   const [documentDetail, setDocumentDetail] = useState<DocumentDetail | null>(null);
   const [documentActions, setDocumentActions] = useState<DocumentWorkflowActions | null>(null);
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
+  const [componentSearch, setComponentSearch] = useState("");
+  const [expandedSectionIds, setExpandedSectionIds] = useState<Set<string>>(() => new Set());
+  const [detailDrawerOpen, setDetailDrawerOpen] = useState(true);
   const [componentDrafts, setComponentDrafts] = useState<Record<string, string>>({});
   const [fileForm, setFileForm] = useState<FileForm>({
     name: "Imported review document",
@@ -135,6 +145,39 @@ export function App() {
         : null,
     [documentDetail, selectedComponent]
   );
+  const filteredComponents = useMemo(() => {
+    if (!documentDetail) {
+      return [];
+    }
+
+    const search = componentSearch.trim().toLowerCase();
+    if (!search) {
+      return documentDetail.components;
+    }
+
+    return documentDetail.components.filter((component) =>
+      [component.currentText, component.kind, component.sectionId].some((value) => value.toLowerCase().includes(search))
+    );
+  }, [componentSearch, documentDetail]);
+  const componentSections = useMemo<ComponentSection[]>(() => {
+    const sections = new Map<string, ComponentSection>();
+    for (const component of filteredComponents) {
+      const existing = sections.get(component.sectionId);
+      if (existing) {
+        existing.components.push(component);
+      } else {
+        sections.set(component.sectionId, {
+          id: component.sectionId,
+          label: component.sectionId === "root" ? "Root" : component.sectionId,
+          components: [component]
+        });
+      }
+    }
+    return Array.from(sections.values());
+  }, [filteredComponents]);
+  const selectedDraftChanged = selectedComponent
+    ? (componentDrafts[selectedComponent.id] ?? selectedComponent.currentText) !== selectedComponent.currentText
+    : false;
 
   const latestVersion = documentDetail?.versions.at(-1) ?? null;
   const ingestBlocked = !workflowStatus?.active;
@@ -191,6 +234,19 @@ export function App() {
   );
 
   useEffect(() => {
+    if (!documentDetail) {
+      setExpandedSectionIds(new Set());
+      return;
+    }
+
+    const sectionIds = new Set(documentDetail.components.map((component) => component.sectionId));
+    setExpandedSectionIds((current) => {
+      const next = new Set(Array.from(current).filter((id) => sectionIds.has(id)));
+      return next.size > 0 ? next : sectionIds;
+    });
+  }, [documentDetail]);
+
+  useEffect(() => {
     runPending("initial", refreshGlobal).catch((unknownError: unknown) => {
       setError(unknownError instanceof Error ? unknownError.message : "Unable to load workspace.");
     });
@@ -243,6 +299,22 @@ export function App() {
       actions: response.workflow.actions
     });
     setNotice(`Ingested ${response.document.name}.`);
+  }
+
+  async function handleSelectedFile(file: File | null) {
+    if (!file) {
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    const content = await runPending("file-read", () => file.text());
+    setFileForm({
+      name: file.name,
+      format: formatFromFileName(file.name),
+      content
+    });
+    setNotice(`Loaded ${file.name} for ingest.`);
   }
 
   async function handleUrlIngest() {
@@ -324,8 +396,16 @@ export function App() {
       return;
     }
 
+    await handleToggleComponentHighlight(selectedComponent.id, !selectedHighlight?.enabled);
+  }
+
+  async function handleToggleComponentHighlight(componentId: string, enabled: boolean) {
+    if (!selectedDocumentId) {
+      return;
+    }
+
     setError(null);
-    const response = await runPending("highlight", () => setHighlight(selectedComponent.id, !selectedHighlight?.enabled));
+    const response = await runPending("highlight", () => setHighlight(componentId, enabled));
     setLastAutosave(response.autosave);
     await refreshDetail(selectedDocumentId);
     setNotice(response.highlight.enabled ? "Highlight enabled." : "Highlight disabled.");
@@ -358,6 +438,41 @@ export function App() {
     await refreshDetail(selectedDocumentId);
     await refreshGlobal();
     setNotice(`Moved document to ${response.transition.to}.`);
+  }
+
+  function handleSelectComponent(componentId: string) {
+    setSelectedComponentId(componentId);
+    setDetailDrawerOpen(true);
+  }
+
+  function toggleSection(sectionId: string) {
+    setExpandedSectionIds((current) => {
+      const next = new Set(current);
+      if (next.has(sectionId)) {
+        next.delete(sectionId);
+      } else {
+        next.add(sectionId);
+      }
+      return next;
+    });
+  }
+
+  function focusSelectedComponent() {
+    if (!selectedComponent) {
+      return;
+    }
+
+    setComponentSearch("");
+    setExpandedSectionIds(new Set([selectedComponent.sectionId]));
+    setDetailDrawerOpen(true);
+  }
+
+  function expandAllSections() {
+    setExpandedSectionIds(new Set(componentSections.map((section) => section.id)));
+  }
+
+  function collapseAllSections() {
+    setExpandedSectionIds(new Set());
   }
 
   function reportActionError(action: () => Promise<void>) {
@@ -525,6 +640,15 @@ export function App() {
               }}
             >
               <label>
+                Select file
+                <input
+                  accept=".txt,.md,.html,.htm,text/plain,text/markdown,text/html"
+                  disabled={ingestBlocked || isPending("file-read")}
+                  type="file"
+                  onChange={(event) => reportActionError(() => handleSelectedFile(event.currentTarget.files?.[0] ?? null))}
+                />
+              </label>
+              <label>
                 Name
                 <input
                   disabled={ingestBlocked}
@@ -599,14 +723,14 @@ export function App() {
                   onChange={(event) => setUrlForm((current) => ({ ...current, snapshotHtml: event.target.value }))}
                 />
               </label>
-              <button disabled={ingestBlocked || isPending("url-ingest")} type="submit">
+              <button disabled={ingestBlocked || !urlForm.url.trim() || isPending("url-ingest")} type="submit">
                 {isPending("url-ingest") ? "Ingesting" : "Ingest URL"}
               </button>
             </form>
           </div>
         </section>
 
-        <section className="review-layout" id="review">
+        <section className={detailDrawerOpen ? "review-layout" : "review-layout drawer-collapsed"} id="review">
           <div className="section-list">
             <div className="review-section">
               <div className="section-header">
@@ -631,46 +755,105 @@ export function App() {
                   ))}
                 </div>
               </div>
+              <div className="review-tools">
+                <label className="search-field">
+                  Search components
+                  <input
+                    placeholder="Search text, kind, or section"
+                    value={componentSearch}
+                    onChange={(event) => setComponentSearch(event.target.value)}
+                  />
+                </label>
+                <div className="detail-actions">
+                  <button disabled={!selectedComponent} onClick={focusSelectedComponent}>
+                    Focus
+                  </button>
+                  <button disabled={componentSections.length === 0} onClick={expandAllSections}>
+                    Expand
+                  </button>
+                  <button disabled={componentSections.length === 0} onClick={collapseAllSections}>
+                    Collapse
+                  </button>
+                  <button disabled={!selectedComponent} onClick={() => setDetailDrawerOpen((current) => !current)}>
+                    {detailDrawerOpen ? "Hide Detail" : "Show Detail"}
+                  </button>
+                </div>
+              </div>
               <div className="component-list">
-                {documentDetail?.components.map((component) => {
-                  const isSelected = component.id === selectedComponent?.id;
-                  const highlight = documentDetail.review.highlights.find((item) => item.componentId === component.id);
-                  const reviewCount =
-                    documentDetail.review.annotations.filter((item) => item.componentId === component.id).length +
-                    documentDetail.review.questions.filter((item) => item.componentId === component.id).length +
-                    documentDetail.review.evidenceSources.filter((item) => item.componentId === component.id).length;
+                {componentSections.map((section) => {
+                  const expanded = expandedSectionIds.has(section.id) || Boolean(componentSearch.trim());
                   return (
-                    <button
-                      className={isSelected ? "review-component selected" : "review-component"}
-                      key={component.id}
-                      onClick={() => setSelectedComponentId(component.id)}
-                    >
-                      <span className="component-text">{component.currentText}</span>
-                      <span className="component-meta">
-                        {component.kind} · {component.sectionId}
-                        {highlight?.enabled ? " · highlighted" : ""}
-                        {reviewCount > 0 ? ` · ${reviewCount} review notes` : ""}
-                      </span>
-                    </button>
+                    <section className="component-section" key={section.id}>
+                      <button className="section-toggle" onClick={() => toggleSection(section.id)}>
+                        <span>{section.label}</span>
+                        <small>{section.components.length} components</small>
+                        <span>{expanded ? "Collapse" : "Expand"}</span>
+                      </button>
+                      {expanded ? (
+                        <div className="component-stack">
+                          {section.components.map((component) => {
+                            const isSelected = component.id === selectedComponent?.id;
+                            const highlight = documentDetail?.review.highlights.find((item) => item.componentId === component.id);
+                            const reviewCount = documentDetail
+                              ? documentDetail.review.annotations.filter((item) => item.componentId === component.id).length +
+                                documentDetail.review.questions.filter((item) => item.componentId === component.id).length +
+                                documentDetail.review.evidenceSources.filter((item) => item.componentId === component.id).length
+                              : 0;
+                            return (
+                              <article
+                                className={isSelected ? "review-component selected" : "review-component"}
+                                key={component.id}
+                              >
+                                <button className="component-select" onClick={() => handleSelectComponent(component.id)}>
+                                  <span className="component-text">{component.currentText}</span>
+                                  <span className="component-meta">
+                                    {component.kind} · {component.sectionId}
+                                    {highlight?.enabled ? " · highlighted" : ""}
+                                    {reviewCount > 0 ? ` · ${reviewCount} review notes` : ""}
+                                  </span>
+                                </button>
+                                <div className="component-inline-actions">
+                                  <button onClick={() => handleSelectComponent(component.id)}>Detail</button>
+                                  <button
+                                    disabled={isPending("highlight")}
+                                    onClick={() =>
+                                      reportActionError(() => handleToggleComponentHighlight(component.id, !highlight?.enabled))
+                                    }
+                                  >
+                                    {highlight?.enabled ? "Unmark" : "Mark"}
+                                  </button>
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </section>
                   );
                 })}
+                {documentDetail && filteredComponents.length === 0 ? (
+                  <div className="empty-state">No components match the current search.</div>
+                ) : null}
                 {isPending("detail") ? <div className="empty-state">Loading document detail.</div> : null}
               </div>
             </div>
           </div>
 
-          <aside className="detail-panel">
+          <aside className={detailDrawerOpen ? "detail-panel" : "detail-panel hidden"} aria-hidden={!detailDrawerOpen}>
             <div className="panel-heading">
               <div>
                 <h2>Component Detail</h2>
                 <p>{selectedComponent ? selectedComponent.id : "Select a component."}</p>
               </div>
-              <button
-                disabled={!selectedComponent || isPending("highlight")}
-                onClick={() => reportActionError(handleToggleHighlight)}
-              >
-                {selectedHighlight?.enabled ? "Unhighlight" : "Highlight"}
-              </button>
+              <div className="detail-actions">
+                <button
+                  disabled={!selectedComponent || isPending("highlight")}
+                  onClick={() => reportActionError(handleToggleHighlight)}
+                >
+                  {selectedHighlight?.enabled ? "Unhighlight" : "Highlight"}
+                </button>
+                <button onClick={() => setDetailDrawerOpen(false)}>Close</button>
+              </div>
             </div>
 
             {selectedComponent ? (
@@ -686,6 +869,7 @@ export function App() {
                   />
                 </label>
                 <div className="detail-actions">
+                  {selectedDraftChanged ? <span className="draft-state">Unsaved text draft</span> : null}
                   <button disabled={isPending("edit")} onClick={() => reportActionError(handleComponentEdit)}>
                     {isPending("edit") ? "Autosaving" : "Autosave Text"}
                   </button>
@@ -786,6 +970,14 @@ export function App() {
       </main>
     </div>
   );
+}
+
+function formatFromFileName(fileName: string): FileForm["format"] {
+  const extension = fileName.split(".").pop()?.toLowerCase();
+  if (extension === "md" || extension === "html" || extension === "htm") {
+    return extension;
+  }
+  return "txt";
 }
 
 function RecordList({ emptyLabel, records }: { emptyLabel: string; records: string[] }) {

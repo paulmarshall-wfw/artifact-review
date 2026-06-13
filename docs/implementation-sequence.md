@@ -70,6 +70,7 @@ Completed:
 - Autosave staged review changes.
 - Add review-mutation autosave snapshots that preserve component IDs, source mappings, original text hashes, and imported source snapshots.
 - Wire React file and URL ingest forms to the service and block them until an active workflow exists.
+- Add browser file selection for `txt`, `md`, `html`, and `htm` so selected files populate the service-backed ingest flow before document creation.
 
 Remaining:
 
@@ -88,6 +89,7 @@ Completed:
 - Return compact document rows separately from full document/component/review data.
 - Preserve audit history for text mutations.
 - Wire the React review workspace to document list/detail, component text edits, annotations, questions, evidence, highlights, autosave status, workflow actions, and save.
+- Add review workspace search, component section grouping, expand/collapse controls, selected-component focus, inline detail/highlight controls, and open/closed detail drawer state.
 
 Remaining:
 
