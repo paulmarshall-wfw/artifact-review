@@ -92,9 +92,11 @@ describe("provider readiness", () => {
       registeredAdapterKeys: ["openai-compatible-cloud"],
       registry: {
         configured: true,
+        registryUrl: "http://127.0.0.1:5181",
         profileKey: "registry-profile",
         reachable: true,
         missingProfile: false,
+        profiles: [{ profileKey: "registry-profile" }],
         profile: { profileKey: "registry-profile" },
         error: null,
         providers: [

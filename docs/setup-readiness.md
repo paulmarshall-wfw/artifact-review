@@ -4,7 +4,7 @@ Artifact Review should be explicit about setup blockers before users try to inge
 
 ## Required Local Configuration
 
-Copy `.env.example` to `.env` and fill values appropriate for local development.
+Copy `.env.example` to `.env` and fill values appropriate for local development. The local service loads `.env` at startup; explicit process environment values override `.env`.
 
 | Variable | Required for | Notes |
 | --- | --- | --- |
@@ -28,9 +28,13 @@ Copy `.env.example` to `.env` and fill values appropriate for local development.
 | `GET /api/provider-readiness/tasks/:taskKey` | Provider readiness and invocation summary for a task key. |
 | `GET /api/provider-settings` | Effective provider registry URL, selected profile, demo mode, and value sources. |
 | `PUT /api/provider-settings` | Saves non-secret provider runtime settings in app settings. |
-| `GET /api/settings` | Full Settings summary for workflow, provider registry, task routes, predefined landing areas, readiness, and recent task runs. |
+| `GET /api/settings` | Full Settings summary for database, workflow, provider registry/catalog, processing hooks, task routes, predefined landing areas, readiness, and recent task runs. |
+| `GET /api/settings/database` | Returns effective and saved database URL state, readiness, source, and whether restart is required. |
+| `PATCH /api/settings/database` | Writes `DATABASE_URL` to `.env` and returns a refreshed Settings summary. Restart the app to apply changed database connections. |
 | `PATCH /api/settings/provider-registry` | Saves non-secret provider registry settings and returns refreshed Settings summary data. |
 | `POST /api/settings/providers/refresh` | Recomputes provider readiness without changing saved settings. |
+| `POST /api/settings/processing-hooks` | Creates an app-owned processing hook key with default no-op policy. |
+| `DELETE /api/settings/processing-hooks/:hookKey` | Deletes an unused processing hook. Hooks assigned to task routes cannot be deleted. |
 | `GET /api/settings/render-slots` | Lists predefined render slots and current task assignments. |
 | `GET /api/settings/render-slots/:slot/actions` | Lists slot-driven task actions and readiness reasons. |
 | `GET /api/settings/task-runs` | Lists recent task runs for diagnostics. |
@@ -40,20 +44,26 @@ Copy `.env.example` to `.env` and fill values appropriate for local development.
 
 Settings is organized as a left section navigator with focused detail panels:
 
-- Workflow: import/activation/status and workflow readiness.
-- Provider Registry: registry URL, selected profile, demo mode, refresh, catalog status, and provider readiness.
-- AI Tasks: editable task route fields for provider key, hook, render slot, order, enabled state, model override, and display metadata.
+- Database: `DATABASE_URL`, readiness, active source, saved `.env` state, and restart-required status.
+- Workflow: state-workflow JSON file selection, import/activation/status, and workflow readiness.
+- Provider Registry: registry URL, selected profile, demo mode, refresh, registry metadata, and read-only provider catalog for the active profile.
+- Processing Hooks: app-owned hook key registration, implementation/default no-op status, task usage count, and delete controls for unused hooks.
+- AI Tasks: editable task route fields for provider key, registered hook, render slot, order, enabled state, model override, and display metadata.
 - Landing Areas: predefined render slots and current task assignments.
 - Diagnostics: setup/provider readiness plus recent task runs.
 - Ingest: file and URL ingest, still blocked until an active workflow exists.
 
 The Settings section can save:
 
+- database URL to local `.env`
 - provider registry URL
 - selected provider profile key
 - explicit deterministic demo mode
+- processing hook keys
 
-These settings are stored in `app_settings` and take precedence over first-run environment values. Clearing a text field removes the saved value and allows the corresponding environment bootstrap value to apply again. Raw provider secrets remain outside Postgres and are only checked through local secret references.
+Database URL changes are stored in `.env` and require an app restart to replace the running database connection. Provider settings are stored in `app_settings` and take precedence over first-run environment values. Clearing a text field removes the saved value and allows the corresponding environment bootstrap value to apply again. Raw provider secrets remain outside Postgres and are only checked through local secret references.
+
+Processing hooks are owned by Artifact Review. Newly created hooks are registered as default no-op until backend code implements the hook. Task routes can select only registered hooks, and enabling a task route through a no-op hook is blocked.
 
 Provider-backed actions should use task-specific readiness. The component detail panel shows the selected provider, profile, adapter, prompt version, demo-mode state, and `externalSend` before `AI Suggest` can be invoked. Suggestions keep task-run provenance visible with provider/profile, validation status, latency, and external-send state.
 

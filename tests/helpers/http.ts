@@ -22,6 +22,7 @@ export function createQueuedDatabase(queuedRows: object[][]): Queryable & { quer
   const queries: QueuedQuery[] = [];
   const appSettings = new Map<string, unknown>();
   const documents = new Map<string, Record<string, unknown>>();
+  const processingHooks = new Map<string, Record<string, unknown>>();
 
   return {
     queries,
@@ -79,6 +80,41 @@ export function createQueuedDatabase(queuedRows: object[][]): Queryable & { quer
           }
         }
         return buildQueryResult(rows);
+      }
+
+      if (normalizedText.includes("insert into processing_hooks") && typeof values?.[0] === "string") {
+        if (processingHooks.has(values[0])) {
+          return buildQueryResult([]);
+        }
+        const hook = {
+          hook_key: values[0],
+          implementation_key: typeof values[1] === "string" ? values[1] : `unimplemented:${values[0]}`,
+          policy: "default_noop",
+          created_at: new Date("2026-06-13T00:00:00.000Z"),
+          task_usage_count: 0
+        };
+        processingHooks.set(values[0], hook);
+        return buildQueryResult([hook] as T[]);
+      }
+
+      if (normalizedText.includes("delete from processing_hooks") && typeof values?.[0] === "string") {
+        const existing = processingHooks.get(values[0]);
+        processingHooks.delete(values[0]);
+        return buildQueryResult(existing ? ([{ hook_key: values[0] }] as T[]) : []);
+      }
+
+      if (normalizedText.includes("from processing_hooks") && normalizedText.includes("left join task_definitions")) {
+        const rows = Array.from(processingHooks.values()).sort((left, right) =>
+          String(left.hook_key).localeCompare(String(right.hook_key))
+        );
+        return buildQueryResult(rows as T[]);
+      }
+
+      if (normalizedText.includes("from processing_hooks")) {
+        const rows = Array.from(processingHooks.values()).sort((left, right) =>
+          String(left.hook_key).localeCompare(String(right.hook_key))
+        );
+        return buildQueryResult(rows as T[]);
       }
 
       const rows = (queuedRows.shift() ?? []) as T[];

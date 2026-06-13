@@ -1091,7 +1091,7 @@ dt {
 .workflow-summary dl {
   display: grid;
   gap: 0.55rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .validation {
@@ -1109,21 +1109,192 @@ dt {
   color: #9b4d13;
 }
 
+.database-settings-form,
 .provider-settings-form {
   display: grid;
   gap: 0.65rem;
+}
+
+.database-settings-form {
+  grid-template-columns: minmax(260px, 1fr) auto;
+}
+
+.provider-settings-form {
   grid-template-columns: minmax(180px, 1fr) minmax(140px, 0.75fr) auto auto;
 }
 
+.database-settings-form small,
 .provider-settings-form small {
   color: var(--text-3);
   font-size: 0.76rem;
 }
 
+.database-settings-form button,
 .provider-settings-form .inline-check,
 .provider-settings-form button {
   align-self: end;
   min-height: 2.3rem;
+}
+
+.provider-registry-profile-card,
+.processing-hook-create-card {
+  border: 1px solid #e2e7ef;
+  border-radius: var(--radius);
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.75rem;
+}
+
+.provider-registry-profile-controls {
+  align-items: end;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: minmax(180px, 1fr) minmax(120px, 0.55fr) minmax(220px, 1.2fr) auto auto;
+}
+
+.provider-registry-meta {
+  border: 1px solid #e2e7ef;
+  border-radius: var(--radius);
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 0.65rem;
+}
+
+.provider-registry-meta div,
+.provider-catalog-meta div {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.provider-registry-meta span {
+  color: var(--text-3);
+  font-size: 0.75rem;
+}
+
+.provider-registry-meta strong {
+  font-size: 0.84rem;
+  overflow-wrap: anywhere;
+}
+
+.provider-catalog-list {
+  border: 1px solid #e2e7ef;
+  border-radius: var(--radius);
+  display: grid;
+  overflow: hidden;
+}
+
+.provider-catalog-row {
+  align-items: start;
+  display: grid;
+  gap: 0.5rem 0.7rem;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  padding: 0.72rem;
+}
+
+.provider-catalog-row + .provider-catalog-row {
+  border-top: 1px solid var(--border-light);
+}
+
+.provider-catalog-row > div:first-child {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.provider-catalog-row span,
+.provider-catalog-row p {
+  overflow-wrap: anywhere;
+}
+
+.provider-catalog-row > div:first-child span,
+.provider-catalog-row p {
+  color: var(--text-3);
+  font-size: 0.78rem;
+  margin: 0;
+}
+
+.provider-catalog-meta {
+  display: grid;
+  gap: 0.45rem;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.provider-catalog-meta dd {
+  font-size: 0.82rem;
+}
+
+.capability-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  grid-column: 1 / -1;
+}
+
+.capability-chip-list span {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 0.72rem;
+  padding: 0.16rem 0.45rem;
+}
+
+.processing-hook-create-card {
+  align-items: end;
+  grid-template-columns: minmax(260px, 1fr) auto;
+}
+
+.processing-hooks-table {
+  border: 1px solid #e2e7ef;
+  border-radius: var(--radius);
+  display: grid;
+  overflow: hidden;
+}
+
+.processing-hooks-row {
+  align-items: center;
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: minmax(160px, 1fr) minmax(150px, 1fr) 190px 72px 110px;
+  padding: 0.52rem 0.65rem;
+}
+
+.processing-hooks-row + .processing-hooks-row {
+  border-top: 1px solid var(--border-light);
+}
+
+.processing-hooks-row > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.processing-hooks-header {
+  background: var(--surface-raised);
+  color: var(--text-3);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.file-picker-button {
+  cursor: pointer;
+  position: relative;
+}
+
+.file-picker-button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.file-picker-button input {
+  block-size: 1px;
+  inline-size: 1px;
+  opacity: 0;
+  overflow: hidden;
+  position: absolute;
 }
 
 .settings-summary {
@@ -1176,7 +1347,8 @@ dt {
 
 .task-route-heading small,
 .render-slot-row span,
-.render-slot-row small {
+.render-slot-row small,
+.field-note {
   color: var(--text-3);
   font-size: 0.76rem;
   overflow-wrap: anywhere;
@@ -1293,15 +1465,25 @@ dt {
   color: #9b4d13;
 }
 
+.status-muted {
+  background: #eef2f7;
+  color: var(--text-2);
+}
+
 @media (max-width: 1180px) {
   .admin-two-column,
   .ingest-grid,
-  .task-route-grid {
+  .task-route-grid,
+  .provider-registry-meta,
+  .provider-catalog-meta,
+  .processing-hooks-row {
     grid-template-columns: 1fr;
   }
 
   .provider-settings-form,
-  .settings-summary {
+  .settings-summary,
+  .provider-registry-profile-controls,
+  .processing-hook-create-card {
     grid-template-columns: 1fr;
   }
 }
@@ -1396,6 +1578,14 @@ dt {
 @media (max-width: 720px) {
   .readiness-grid,
   .workflow-summary dl,
+  .database-settings-form,
+  .provider-settings-form,
+  .provider-registry-profile-controls,
+  .provider-registry-meta,
+  .provider-catalog-row,
+  .provider-catalog-meta,
+  .processing-hook-create-card,
+  .processing-hooks-row,
   .ingest-form,
   .evidence-form,
   .invocation-summary,

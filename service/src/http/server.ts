@@ -5,6 +5,7 @@ import express from "express";
 import type pg from "pg";
 import { z } from "zod";
 import type { AppConfig } from "../config/env.js";
+import { readLocalEnvFile, setLocalEnvValue } from "../config/localEnv.js";
 import { buildSameFormatExport, ExportAssemblyError } from "../domain/exporter.js";
 import { checkDatabase } from "../db/pool.js";
 import { combineReadiness } from "../domain/readiness.js";
@@ -14,6 +15,7 @@ import {
   resolveProviderRegistryUrl,
   resolveSelectedProfileSelection
 } from "../providers/readiness.js";
+import { fetchRegistryLookup } from "../providers/registry.js";
 import {
   createArtifactReviewProviderRuntime,
   suggestComponentRevisionTaskKey
@@ -88,6 +90,22 @@ const providerSettingsRequestSchema = z.object({
   demoProviderMode: z.boolean()
 });
 
+const databaseSettingsRequestSchema = z.object({
+  databaseUrl: nullableTrimmedStringSchema.refine(
+    (value) => !value || /^postgres(ql)?:\/\//.test(value),
+    {
+      message: "Database URL must start with postgres:// or postgresql://."
+    }
+  )
+});
+
+const processingHookRequestSchema = z.object({
+  hookKey: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9][a-z0-9-]{0,63}$/, "Hook key must use lowercase letters, numbers, and hyphens.")
+});
+
 const taskRouteRequestSchema = z.object({
   providerKey: nullableTrimmedStringSchema,
   renderSlot: z.string().trim().min(1).optional(),
@@ -137,10 +155,27 @@ async function buildProviderSettingsResponse(config: AppConfig, repositories: Re
   const registry = resolveProviderRegistryUrl(config, saved);
   const profile = resolveSelectedProfileSelection(config, saved);
   const demo = resolveDemoProviderMode(config, saved);
+  const lookup = await fetchRegistryLookup(registry.registryUrl, profile.profileKey);
+  const registryStatus = !registry.registryUrl
+    ? "not_configured"
+    : lookup.missingProfile
+      ? "missing_profile"
+      : lookup.reachable && lookup.profile
+        ? "ready"
+        : "error";
 
   return {
     registryUrl: registry.registryUrl ?? "",
+    bootstrapProfileKey: config.INVOKE_PROVIDERS_PROFILE?.trim() || null,
     selectedProviderProfileKey: profile.profileKey ?? "",
+    activeProfileKey: profile.profileKey ?? null,
+    profileSource: profile.source,
+    profiles: lookup.profiles,
+    activeProfile: lookup.profile,
+    status: registryStatus,
+    error: registryStatus === "ready" ? null : lookup.error,
+    providerCount: lookup.providers.length,
+    updatedAt: new Date().toISOString(),
     demoProviderMode: demo.enabled,
     sources: {
       registryUrl: registry.source,
@@ -155,11 +190,50 @@ async function buildProviderSettingsResponse(config: AppConfig, repositories: Re
   };
 }
 
+async function buildProviderCatalogResponse(config: AppConfig, repositories: Repositories | null) {
+  const saved = (await repositories?.appSettings.getProviderRuntimeSettings()) ?? {};
+  const registry = resolveProviderRegistryUrl(config, saved);
+  const profile = resolveSelectedProfileSelection(config, saved);
+  const lookup = await fetchRegistryLookup(registry.registryUrl, profile.profileKey);
+
+  return {
+    registry: {
+      url: registry.registryUrl ?? "",
+      profile: profile.profileKey ?? null,
+      reachable: lookup.reachable,
+      error: lookup.error
+    },
+    providers: lookup.providers
+  };
+}
+
 async function listRenderSlotActions(config: AppConfig, repositories: Repositories | null, slot: string) {
   if (!repositories) {
     return [];
   }
   return await createArtifactReviewProviderRuntime(config, repositories).getRenderSlotActions(slot);
+}
+
+async function buildDatabaseSettingsResponse(config: AppConfig, pool: pg.Pool | null) {
+  const localEnv = await readLocalEnvFile(config.localEnvFilePath);
+  const savedDatabaseUrl = localEnv.DATABASE_URL?.trim() || null;
+  const activeDatabaseUrl = config.DATABASE_URL?.trim() || "";
+  const database = await checkDatabase(pool);
+
+  return {
+    databaseUrl: activeDatabaseUrl,
+    configured: Boolean(activeDatabaseUrl),
+    ready: database.ready,
+    reason: database.reason,
+    restartRequired: savedDatabaseUrl !== activeDatabaseUrl,
+    sources: {
+      databaseUrl: config.sources.DATABASE_URL
+    },
+    saved: {
+      databaseUrl: savedDatabaseUrl
+    },
+    localEnvFilePath: config.localEnvFilePath
+  };
 }
 
 async function buildSettingsReadiness(config: AppConfig, repositories: Repositories | null, pool: pg.Pool | null) {
@@ -176,11 +250,14 @@ async function buildSettingsReadiness(config: AppConfig, repositories: Repositor
 }
 
 async function buildSettingsSummary(config: AppConfig, repositories: Repositories | null, pool: pg.Pool | null) {
-  const [settings, readiness, activeWorkflow, taskRoutes, taskRuns] = await Promise.all([
+  const [settings, providerCatalog, database, readiness, activeWorkflow, taskRoutes, processingHooks, taskRuns] = await Promise.all([
     buildProviderSettingsResponse(config, repositories),
+    buildProviderCatalogResponse(config, repositories),
+    buildDatabaseSettingsResponse(config, pool),
     buildSettingsReadiness(config, repositories, pool),
     repositories ? getActiveDocumentWorkflow(repositories) : Promise.resolve(null),
     repositories ? repositories.providerTasks.listTaskRoutes() : Promise.resolve([]),
+    repositories ? repositories.providerTasks.listProcessingHookSummaries() : Promise.resolve([]),
     repositories ? repositories.taskRuns.listTaskRuns(25) : Promise.resolve([])
   ]);
   const renderSlots = await Promise.all(
@@ -196,6 +273,8 @@ async function buildSettingsSummary(config: AppConfig, repositories: Repositorie
   );
 
   return {
+    database,
+    providerCatalog,
     providerRegistry: settings,
     workflow: {
       active: Boolean(activeWorkflow),
@@ -203,6 +282,7 @@ async function buildSettingsSummary(config: AppConfig, repositories: Repositorie
       readiness: buildWorkflowReadiness(Boolean(activeWorkflow))
     },
     readiness,
+    processingHooks,
     taskRoutes,
     renderSlots,
     taskRuns
@@ -496,6 +576,25 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
     response.json(await buildSettingsSummary(config, repositories, pool));
   });
 
+  app.get("/api/settings/database", async (_request, response) => {
+    response.json(await buildDatabaseSettingsResponse(config, pool));
+  });
+
+  app.patch("/api/settings/database", async (request, response) => {
+    const parsed = databaseSettingsRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json({
+        error: "invalid_database_settings",
+        issues: parsed.error.issues.map((issue) => issue.message)
+      });
+      return;
+    }
+
+    await setLocalEnvValue("DATABASE_URL", parsed.data.databaseUrl ?? null, config.localEnvFilePath);
+
+    response.json(await buildSettingsSummary(config, repositories, pool));
+  });
+
   app.get("/api/settings/readiness", async (_request, response) => {
     response.json(await buildSettingsReadiness(config, repositories, pool));
   });
@@ -587,6 +686,84 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
     });
   });
 
+  app.post("/api/settings/processing-hooks", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before creating processing hooks."
+      });
+      return;
+    }
+
+    const parsed = processingHookRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json({
+        error: "invalid_processing_hook",
+        issues: parsed.error.issues.map((issue) => issue.message)
+      });
+      return;
+    }
+
+    const hook = await repositories.providerTasks.createProcessingHook(parsed.data.hookKey);
+    if (!hook) {
+      response.status(409).json({
+        error: "processing_hook_exists",
+        message: "A processing hook already exists for this hook key."
+      });
+      return;
+    }
+
+    response.status(201).json({
+      processingHook: hook,
+      summary: await buildSettingsSummary(config, repositories, pool)
+    });
+  });
+
+  app.delete("/api/settings/processing-hooks/:hookKey", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before deleting processing hooks."
+      });
+      return;
+    }
+
+    const parsed = processingHookRequestSchema.safeParse({ hookKey: request.params.hookKey });
+    if (!parsed.success) {
+      response.status(422).json({
+        error: "invalid_processing_hook",
+        issues: parsed.error.issues.map((issue) => issue.message)
+      });
+      return;
+    }
+
+    const hook = await repositories.providerTasks.getProcessingHookSummary(parsed.data.hookKey);
+    if (!hook) {
+      response.status(404).json({
+        error: "processing_hook_not_found",
+        hookKey: parsed.data.hookKey
+      });
+      return;
+    }
+
+    if (!hook.deletable) {
+      response.status(409).json({
+        error: "processing_hook_in_use",
+        message: hook.deleteBlockedReason ?? "Processing hook is used by configured tasks.",
+        hookKey: hook.hookKey,
+        taskUsageCount: hook.taskUsageCount
+      });
+      return;
+    }
+
+    await repositories.providerTasks.deleteProcessingHook(parsed.data.hookKey);
+    response.json({
+      deleted: true,
+      hookKey: parsed.data.hookKey,
+      summary: await buildSettingsSummary(config, repositories, pool)
+    });
+  });
+
   app.patch("/api/settings/tasks/:taskKey/route", async (request, response) => {
     if (!repositories) {
       response.status(409).json({
@@ -613,12 +790,23 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       return;
     }
 
-    if (parsed.data.hookKey) {
-      const hooks = await repositories.providerTasks.listProcessingHooks();
-      if (!hooks.some((hook) => hook.hook_key === parsed.data.hookKey)) {
+    const requestedHookKey =
+      parsed.data.hookKey ??
+      (parsed.data.enabled === true ? (await repositories.providerTasks.getTaskAsset(request.params.taskKey))?.hookKey : undefined);
+    if (requestedHookKey) {
+      const hook = await repositories.providerTasks.getProcessingHookSummary(requestedHookKey);
+      if (!hook) {
         response.status(422).json({
           error: "invalid_task_route",
-          issues: [`Hook ${parsed.data.hookKey} is not registered.`]
+          issues: [`Hook ${requestedHookKey} is not registered.`]
+        });
+        return;
+      }
+
+      if (parsed.data.enabled === true && !hook.implemented) {
+        response.status(422).json({
+          error: "invalid_task_route",
+          issues: [`Hook ${requestedHookKey} is registered but has no backend implementation.`]
         });
         return;
       }

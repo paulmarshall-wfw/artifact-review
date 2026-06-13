@@ -4,6 +4,16 @@ Append brief entries here when project work is completed. Keep this file concise
 
 ## 2026-06-13
 
+- Task: Add Memo Capture-style provider registry and processing hook configuration.
+  Outcome: Added a Settings Processing Hooks section for app-owned hook registration/deletion, returned hook summaries and provider catalog data from the Settings API, reshaped Provider Registry into a profile/catalog view, and changed AI task routes to choose from registered hooks instead of free-text keys. Task routes cannot be enabled through default no-op hooks until backend implementation exists.
+  Verification: `npm run verify` passed with 10 test files, 1 skipped Postgres suite, 52 tests passed, and 2 skipped; Vite production build passed. Live checks showed `/ready` returning true, `/api/settings` returning provider catalog plus processing hooks, and `http://127.0.0.1:5184/` serving the app shell. Chrome automation was unavailable on `127.0.0.1:9222`, so no Chrome UI smoke was claimed.
+  Traceability: Git branch `main` at `a898949`; no commit yet; changed provider registry lookup/settings API, processing hook repository/API/client/UI, task route validation/UI, tests, setup/API docs, completed-task ledger, and handoff.
+
+- Task: Make database setup and workflow JSON import user-configurable.
+  Outcome: Added local `.env` loading for service startup, a Settings Database panel that writes `DATABASE_URL` to `.env` and reports restart-required state, and a Workflow JSON picker that lets users choose a state-workflow definition file before validation and activation. The existing `.env` value is now active in the running service.
+  Verification: `npm run verify` passed with 10 test files, 1 skipped Postgres suite, 50 tests passed, and 2 skipped; Vite production build passed. Local service checks showed `/ready` returning true and `/api/settings/database` reporting `DATABASE_URL` from `.env` with no restart required. Chrome automation was unavailable on `127.0.0.1:9222`, so no Chrome UI smoke was claimed.
+  Traceability: Git branch `main` at `a898949`; no commit yet; changed local config loading, Settings API/client/UI, focused tests, setup/API/README docs, completed-task ledger, and handoff.
+
 - Task: Reorganize Settings and provider task actions.
   Outcome: Replaced the flat Admin / Setup page with a Settings workspace with section navigation for Workflow, Provider Registry, AI Tasks, Landing Areas, Diagnostics, and Ingest. Added service-backed Settings APIs, predefined render slots, editable task-route metadata, task-run diagnostics listing, and slot-driven component inline AI Suggest actions while preserving proposal-only accept/reject behavior and keeping ingest blocked until an active workflow exists.
   Verification: `npm run verify` passed with 10 test files, 1 skipped Postgres suite, 48 tests passed, and 2 skipped; Vite production build passed. Chrome smoke against `http://127.0.0.1:5184/` confirmed Settings sections render, predefined landing areas appear without a configured database, ingest controls stay disabled without an active workflow, desktop layout has no horizontal overflow, and Chrome reported no console errors. Narrow viewport resizing was unavailable through the current Chrome automation backend.

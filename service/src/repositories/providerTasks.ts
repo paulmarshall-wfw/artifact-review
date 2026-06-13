@@ -35,6 +35,20 @@ export type TaskRouteSummary = {
   hookReady: boolean;
 };
 
+export type ProcessingHookSummary = {
+  hookKey: string;
+  displayName: string;
+  implemented: boolean;
+  status: "custom_function_implemented" | "default_noop";
+  statusLabel: string;
+  taskUsageCount: number;
+  deletable: boolean;
+  deleteBlockedReason: string | null;
+  policy: string;
+  implementationKey: string;
+  createdAt: string;
+};
+
 export type UpdateTaskRouteInput = {
   providerKey?: string | null;
   renderSlot?: string;
@@ -69,6 +83,8 @@ type ProcessingHookRow = {
   hook_key: string;
   implementation_key: string;
   policy: string;
+  task_usage_count?: number;
+  created_at?: Date | string;
 };
 
 export class ProviderTasksRepository {
@@ -210,6 +226,60 @@ export class ProviderTasksRepository {
     );
     return result.rows;
   }
+
+  async listProcessingHookSummaries(): Promise<ProcessingHookSummary[]> {
+    const result = await this.db.query<ProcessingHookRow>(
+      `
+        select
+          processing_hooks.hook_key,
+          processing_hooks.implementation_key,
+          processing_hooks.policy,
+          processing_hooks.created_at,
+          count(task_definitions.task_key)::int as task_usage_count
+        from processing_hooks
+        left join task_definitions
+          on task_definitions.hook_key = processing_hooks.hook_key
+        group by
+          processing_hooks.hook_key,
+          processing_hooks.implementation_key,
+          processing_hooks.policy,
+          processing_hooks.created_at
+        order by processing_hooks.hook_key asc
+      `
+    );
+    return result.rows.map(mapProcessingHookSummary);
+  }
+
+  async getProcessingHookSummary(hookKey: string): Promise<ProcessingHookSummary | null> {
+    const hooks = await this.listProcessingHookSummaries();
+    return hooks.find((hook) => hook.hookKey === hookKey) ?? null;
+  }
+
+  async createProcessingHook(hookKey: string): Promise<ProcessingHookSummary | null> {
+    const normalizedHookKey = hookKey.trim();
+    const result = await this.db.query<ProcessingHookRow>(
+      `
+        insert into processing_hooks (hook_key, implementation_key, policy)
+        values ($1, $2, 'default_noop')
+        on conflict (hook_key) do nothing
+        returning hook_key, implementation_key, policy, created_at, 0::int as task_usage_count
+      `,
+      [normalizedHookKey, `unimplemented:${normalizedHookKey}`]
+    );
+    return result.rows[0] ? mapProcessingHookSummary(result.rows[0]) : null;
+  }
+
+  async deleteProcessingHook(hookKey: string): Promise<boolean> {
+    const result = await this.db.query<{ hook_key: string }>(
+      `
+        delete from processing_hooks
+        where hook_key = $1
+        returning hook_key
+      `,
+      [hookKey]
+    );
+    return result.rows.length > 0;
+  }
 }
 
 function mapTaskAsset(row: ProviderTaskAssetRow): ProviderTaskAsset {
@@ -249,6 +319,32 @@ function mapTaskRouteSummary(asset: ProviderTaskAsset): TaskRouteSummary {
     hookImplementationKey: asset.hookImplementationKey,
     hookReady: asset.hookImplementationKey === asset.hookKey
   };
+}
+
+function mapProcessingHookSummary(row: ProcessingHookRow): ProcessingHookSummary {
+  const implemented = row.implementation_key === row.hook_key;
+  const taskUsageCount = row.task_usage_count ?? 0;
+  return {
+    hookKey: row.hook_key,
+    displayName: displayNameFromHookKey(row.hook_key),
+    implemented,
+    status: implemented ? "custom_function_implemented" : "default_noop",
+    statusLabel: implemented ? "Custom function implemented" : "Default no-op",
+    taskUsageCount,
+    deletable: taskUsageCount === 0,
+    deleteBlockedReason: taskUsageCount === 0 ? null : "Hook is used by configured tasks.",
+    policy: row.policy,
+    implementationKey: row.implementation_key,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at ?? "")
+  };
+}
+
+function displayNameFromHookKey(hookKey: string): string {
+  return hookKey
+    .split("-")
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
 }
 
 function readPromptName(prompt: JsonValue | null): string | null {

@@ -36,7 +36,16 @@ export type ProviderReadiness = ReadinessResponse & {
 
 export type ProviderSettings = {
   registryUrl: string;
+  bootstrapProfileKey?: string | null;
   selectedProviderProfileKey: string;
+  activeProfileKey?: string | null;
+  profileSource?: "saved" | "env" | "none";
+  profiles?: RegistryProfile[];
+  activeProfile?: RegistryProfile | null;
+  status?: "ready" | "missing_profile" | "not_configured" | "error";
+  error?: string | null;
+  providerCount?: number;
+  updatedAt?: string | null;
   demoProviderMode: boolean;
   sources: {
     registryUrl: "saved" | "env" | "none";
@@ -62,6 +71,68 @@ export type ProviderSettingsSaveResponse = {
 };
 
 export type ProviderRegistrySettings = ProviderSettings;
+
+export type RegistryProfile = {
+  profileKey: string;
+  displayName?: string;
+  description?: string;
+};
+
+export type ProviderCatalogProvider = {
+  providerKey: string;
+  displayName?: string;
+  providerKind?: string;
+  adapterKey?: string;
+  model?: string;
+  enabled?: boolean;
+  externalSend?: boolean;
+  requiredSecretRef?: string;
+  capabilities?: { key: string; displayName?: string }[];
+  health?: { status?: string; message?: string };
+};
+
+export type ProviderCatalogSummary = {
+  registry: {
+    url: string;
+    profile: string | null;
+    reachable: boolean;
+    error: string | null;
+  };
+  providers: ProviderCatalogProvider[];
+};
+
+export type ProcessingHookSummary = {
+  hookKey: string;
+  displayName: string;
+  implemented: boolean;
+  status: "custom_function_implemented" | "default_noop";
+  statusLabel: string;
+  taskUsageCount: number;
+  deletable: boolean;
+  deleteBlockedReason: string | null;
+  policy: string;
+  implementationKey: string;
+  createdAt: string;
+};
+
+export type DatabaseSettings = {
+  databaseUrl: string;
+  configured: boolean;
+  ready: boolean;
+  reason?: string;
+  restartRequired: boolean;
+  sources: {
+    databaseUrl: "env" | "local-env" | "none";
+  };
+  saved: {
+    databaseUrl: string | null;
+  };
+  localEnvFilePath: string;
+};
+
+export type DatabaseSettingsSaveRequest = {
+  databaseUrl: string | null;
+};
 
 export type TaskRouteSummary = {
   taskKey: string;
@@ -101,9 +172,12 @@ export type RenderSlotAction = {
 export type TaskRunSummary = TaskRun;
 
 export type SettingsSummary = {
+  database: DatabaseSettings;
+  providerCatalog: ProviderCatalogSummary;
   providerRegistry: ProviderRegistrySettings;
   workflow: WorkflowStatus;
   readiness: ReadinessResponse;
+  processingHooks: ProcessingHookSummary[];
   taskRoutes: TaskRouteSummary[];
   renderSlots: RenderSlotSummary[];
   taskRuns: TaskRunSummary[];
@@ -481,6 +555,13 @@ export async function getSettingsSummary(): Promise<SettingsSummary> {
   return requestJson<SettingsSummary>("/api/settings");
 }
 
+export async function saveDatabaseSettings(payload: DatabaseSettingsSaveRequest): Promise<SettingsSummary> {
+  return requestJson<SettingsSummary>("/api/settings/database", {
+    method: "PATCH",
+    ...jsonBody(payload)
+  });
+}
+
 export async function saveProviderRegistrySettings(payload: ProviderSettingsSaveRequest): Promise<SettingsSummary> {
   return requestJson<SettingsSummary>("/api/settings/provider-registry", {
     method: "PATCH",
@@ -518,6 +599,33 @@ export async function getRenderSlotActions(slot: string): Promise<{ slot: string
 
 export async function getSettingsTaskRuns(): Promise<{ taskRuns: TaskRunSummary[] }> {
   return requestJson<{ taskRuns: TaskRunSummary[] }>("/api/settings/task-runs");
+}
+
+export async function createProcessingHook(hookKey: string): Promise<{
+  processingHook: ProcessingHookSummary;
+  summary: SettingsSummary;
+}> {
+  return requestJson<{
+    processingHook: ProcessingHookSummary;
+    summary: SettingsSummary;
+  }>("/api/settings/processing-hooks", {
+    method: "POST",
+    ...jsonBody({ hookKey })
+  });
+}
+
+export async function deleteProcessingHook(hookKey: string): Promise<{
+  deleted: true;
+  hookKey: string;
+  summary: SettingsSummary;
+}> {
+  return requestJson<{
+    deleted: true;
+    hookKey: string;
+    summary: SettingsSummary;
+  }>(`/api/settings/processing-hooks/${encodeURIComponent(hookKey)}`, {
+    method: "DELETE"
+  });
 }
 
 export async function saveTaskRoute(taskKey: string, payload: TaskRouteSaveRequest): Promise<TaskRouteSaveResponse> {

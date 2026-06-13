@@ -23,7 +23,7 @@ The MVP is grounded by:
 
 ## Local Configuration
 
-Copy `.env.example` to `.env` and fill in local values.
+Copy `.env.example` to `.env` and fill in local values. The local service loads `.env` at startup; process environment values override `.env` values.
 
 Required for database-backed work:
 
@@ -44,7 +44,9 @@ INVOKE_PROVIDERS_REGISTRY_URL=http://127.0.0.1:5181
 INVOKE_PROVIDERS_PROFILE=<profile-key>
 ```
 
-The provider registry URL, selected profile, and deterministic demo mode can be configured in the app's Settings section. Environment values are first-run bootstrap defaults; saved provider settings take priority. Raw provider secrets remain outside Postgres.
+The database URL can also be edited in the app's Settings section. Database URL changes are written to `.env` and take effect after restarting Artifact Review.
+
+The provider registry URL, selected profile, and deterministic demo mode can be configured in Settings. Environment values are first-run bootstrap defaults; saved provider settings take priority. Raw provider secrets remain outside Postgres.
 
 ## Commands
 

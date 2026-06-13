@@ -7,6 +7,8 @@ import {
   addAnnotation,
   addEvidence,
   addQuestion,
+  createProcessingHook,
+  deleteProcessingHook,
   executeWorkflowAction,
   exportDocument,
   getDocumentDetail,
@@ -23,6 +25,7 @@ import {
   listDocuments,
   rejectAiSuggestion,
   saveDocument,
+  saveDatabaseSettings,
   saveProviderRegistrySettings,
   saveTaskRoute,
   setHighlight,
@@ -35,8 +38,10 @@ import {
   type DocumentWorkflowActions,
   type EvidenceKind,
   type ExportedFile,
+  type DatabaseSettings,
   type ProviderReadiness,
   type ProviderSettings,
+  type ProcessingHookSummary,
   type RenderSlotAction,
   type RenderSlotSummary,
   type SettingsSummary,
@@ -57,8 +62,12 @@ const defaultFileContent =
 
 type PendingKey =
   | "initial"
+  | "database-settings"
+  | "processing-hook-create"
+  | "processing-hook-delete"
   | "workflow-validate"
   | "workflow-activate"
+  | "workflow-file-read"
   | "provider-settings"
   | "provider-refresh"
   | "task-route"
@@ -78,7 +87,7 @@ type PendingKey =
   | "workflow-action";
 
 type AppPage = "review" | "settings";
-type SettingsSection = "workflow" | "provider" | "tasks" | "landing" | "diagnostics" | "ingest";
+type SettingsSection = "database" | "workflow" | "provider" | "processing-hooks" | "tasks" | "landing" | "diagnostics" | "ingest";
 type ReviewViewMode = "normal" | "focus";
 type InlineReviewTab = "text" | "annotations" | "questions" | "evidence" | "ai";
 
@@ -105,6 +114,16 @@ type ProviderSettingsForm = {
   registryUrl: string;
   selectedProviderProfileKey: string;
   demoProviderMode: boolean;
+};
+
+type DatabaseSettingsForm = {
+  databaseUrl: string;
+};
+
+type WorkflowDefinitionSelection = {
+  label: string;
+  definition: unknown;
+  source: "bundled" | "file";
 };
 
 type TaskRouteDraft = {
@@ -140,7 +159,7 @@ type ComponentCounts = {
 
 export function App() {
   const [activePage, setActivePage] = useState<AppPage>("review");
-  const [settingsSection, setSettingsSection] = useState<SettingsSection>("workflow");
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("database");
   const [reviewViewMode, setReviewViewMode] = useState<ReviewViewMode>("normal");
   const [selectedInlineTab, setSelectedInlineTab] = useState<InlineReviewTab>("text");
   const [selectedBucketId, setSelectedBucketId] = useState("all");
@@ -151,11 +170,21 @@ export function App() {
   const [providerSettings, setProviderSettings] = useState<ProviderSettings | null>(null);
   const [settingsSummary, setSettingsSummary] = useState<SettingsSummary | null>(null);
   const [inlineAiSuggestActions, setInlineAiSuggestActions] = useState<RenderSlotAction[]>([]);
+  const [databaseSettingsForm, setDatabaseSettingsForm] = useState<DatabaseSettingsForm>({
+    databaseUrl: ""
+  });
   const [providerSettingsForm, setProviderSettingsForm] = useState<ProviderSettingsForm>({
     registryUrl: "",
     selectedProviderProfileKey: "",
     demoProviderMode: false
   });
+  const [workflowDefinitionSelection, setWorkflowDefinitionSelection] = useState<WorkflowDefinitionSelection>({
+    label: "Bundled fixture",
+    definition: fixtureDefinition,
+    source: "bundled"
+  });
+  const [newProcessingHookKey, setNewProcessingHookKey] = useState("");
+  const [processingHookKeyInFlight, setProcessingHookKeyInFlight] = useState<string | null>(null);
   const [taskRouteDrafts, setTaskRouteDrafts] = useState<Record<string, TaskRouteDraft>>({});
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus | null>(null);
   const [workflowValidation, setWorkflowValidation] = useState<WorkflowValidationResult | null>(null);
@@ -338,6 +367,9 @@ export function App() {
 
   const applySettingsSummary = useCallback((summary: SettingsSummary) => {
     setSettingsSummary(summary);
+    setDatabaseSettingsForm({
+      databaseUrl: summary.database.saved.databaseUrl ?? summary.database.databaseUrl
+    });
     setProviderSettings(summary.providerRegistry);
     setProviderSettingsForm({
       registryUrl: summary.providerRegistry.registryUrl,
@@ -449,18 +481,93 @@ export function App() {
   async function handleValidateWorkflow() {
     setError(null);
     setNotice(null);
-    const validation = await runPending("workflow-validate", () => validateWorkflowDefinition(fixtureDefinition));
+    const validation = await runPending("workflow-validate", () =>
+      validateWorkflowDefinition(workflowDefinitionSelection.definition)
+    );
     setWorkflowValidation(validation);
-    setNotice(validation.valid ? "Workflow fixture validated." : "Workflow fixture needs changes before activation.");
+    setNotice(
+      validation.valid
+        ? `${workflowDefinitionSelection.label} validated.`
+        : `${workflowDefinitionSelection.label} needs changes before activation.`
+    );
   }
 
   async function handleActivateWorkflow() {
     setError(null);
     setNotice(null);
-    await runPending("workflow-activate", () => activateWorkflowDefinition(fixtureDefinition));
+    await runPending("workflow-activate", () => activateWorkflowDefinition(workflowDefinitionSelection.definition));
     setWorkflowValidation(null);
     await refreshGlobal();
-    setNotice("Workflow fixture is active. Ingest is now available.");
+    setNotice(`${workflowDefinitionSelection.label} is active. Ingest is now available.`);
+  }
+
+  async function handleSelectedWorkflowFile(file: File | null) {
+    if (!file) {
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    const content = await runPending("workflow-file-read", () => file.text());
+    const definition = JSON.parse(content) as unknown;
+    setWorkflowDefinitionSelection({
+      label: file.name,
+      definition,
+      source: "file"
+    });
+    setWorkflowValidation(null);
+    setNotice(`Selected workflow definition ${file.name}.`);
+  }
+
+  async function handleUseBundledWorkflow() {
+    setError(null);
+    setNotice(null);
+    setWorkflowDefinitionSelection({
+      label: "Bundled fixture",
+      definition: fixtureDefinition,
+      source: "bundled"
+    });
+    setWorkflowValidation(null);
+    setNotice("Selected bundled workflow fixture.");
+  }
+
+  async function handleSaveDatabaseSettings() {
+    setError(null);
+    setNotice(null);
+    const summary = await runPending("database-settings", () =>
+      saveDatabaseSettings({
+        databaseUrl: databaseSettingsForm.databaseUrl.trim() || null
+      })
+    );
+    applySettingsSummary(summary);
+    setNotice(
+      summary.database.restartRequired
+        ? "Database URL saved. Restart Artifact Review to apply it."
+        : "Database URL saved and active."
+    );
+  }
+
+  async function handleCreateProcessingHook() {
+    setError(null);
+    setNotice(null);
+    const hookKey = newProcessingHookKey.trim();
+    const response = await runPending("processing-hook-create", () => createProcessingHook(hookKey));
+    applySettingsSummary(response.summary);
+    setNewProcessingHookKey("");
+    setNotice(`Processing hook ${response.processingHook.hookKey} created.`);
+  }
+
+  async function handleDeleteProcessingHook(hook: ProcessingHookSummary) {
+    setError(null);
+    setNotice(null);
+    setProcessingHookKeyInFlight(hook.hookKey);
+    try {
+      const response = await runPending("processing-hook-delete", () => deleteProcessingHook(hook.hookKey));
+      applySettingsSummary(response.summary);
+      setNotice(`Processing hook ${response.hookKey} deleted.`);
+    } finally {
+      setProcessingHookKeyInFlight(null);
+    }
   }
 
   async function handleSaveProviderSettings() {
@@ -1178,25 +1285,36 @@ export function App() {
         </>
       ) : (
         <SettingsWorkspace
+          databaseSettings={settingsSummary?.database ?? null}
+          databaseSettingsForm={databaseSettingsForm}
           fileForm={fileForm}
           ingestBlocked={ingestBlocked}
           isPending={isPending}
           onActivateWorkflow={handleActivateWorkflow}
+          onChangeDatabaseSettingsForm={setDatabaseSettingsForm}
           onChangeFileForm={setFileForm}
+          onChangeNewProcessingHookKey={setNewProcessingHookKey}
           onChangeProviderSettingsForm={setProviderSettingsForm}
           onChangeSection={setSettingsSection}
           onChangeTaskRouteDrafts={setTaskRouteDrafts}
           onChangeUrlForm={setUrlForm}
           onFileIngest={handleFileIngest}
           onProviderRefresh={handleRefreshProviders}
+          onCreateProcessingHook={handleCreateProcessingHook}
+          onDeleteProcessingHook={handleDeleteProcessingHook}
+          onSaveDatabaseSettings={handleSaveDatabaseSettings}
           onSaveProviderSettings={handleSaveProviderSettings}
           onSaveTaskRoute={handleSaveTaskRoute}
           onSelectedFile={handleSelectedFile}
+          onSelectedWorkflowFile={handleSelectedWorkflowFile}
           onUrlIngest={handleUrlIngest}
+          onUseBundledWorkflow={handleUseBundledWorkflow}
           onValidateWorkflow={handleValidateWorkflow}
           providerReadiness={providerReadiness}
           providerSettings={providerSettings}
           providerSettingsForm={providerSettingsForm}
+          newProcessingHookKey={newProcessingHookKey}
+          processingHookKeyInFlight={processingHookKeyInFlight}
           reportActionError={reportActionError}
           section={settingsSection}
           settingsSummary={settingsSummary}
@@ -1204,6 +1322,7 @@ export function App() {
           taskRouteDrafts={taskRouteDrafts}
           urlForm={urlForm}
           workflowStatus={workflowStatus}
+          workflowDefinitionSelection={workflowDefinitionSelection}
           workflowValidation={workflowValidation}
         />
       )}
@@ -1212,25 +1331,36 @@ export function App() {
 }
 
 function SettingsWorkspace({
+  databaseSettings,
+  databaseSettingsForm,
   fileForm,
   ingestBlocked,
   isPending,
+  newProcessingHookKey,
   onActivateWorkflow,
+  onChangeDatabaseSettingsForm,
   onChangeFileForm,
+  onChangeNewProcessingHookKey,
   onChangeProviderSettingsForm,
   onChangeSection,
   onChangeTaskRouteDrafts,
   onChangeUrlForm,
   onFileIngest,
+  onCreateProcessingHook,
+  onDeleteProcessingHook,
   onProviderRefresh,
+  onSaveDatabaseSettings,
   onSaveProviderSettings,
   onSaveTaskRoute,
   onSelectedFile,
+  onSelectedWorkflowFile,
   onUrlIngest,
+  onUseBundledWorkflow,
   onValidateWorkflow,
   providerReadiness,
   providerSettings,
   providerSettingsForm,
+  processingHookKeyInFlight,
   reportActionError,
   section,
   settingsSummary,
@@ -1238,27 +1368,39 @@ function SettingsWorkspace({
   taskRouteDrafts,
   urlForm,
   workflowStatus,
+  workflowDefinitionSelection,
   workflowValidation
 }: {
+  databaseSettings: DatabaseSettings | null;
+  databaseSettingsForm: DatabaseSettingsForm;
   fileForm: FileForm;
   ingestBlocked: boolean;
   isPending: (key: PendingKey) => boolean;
+  newProcessingHookKey: string;
   onActivateWorkflow: () => Promise<void>;
+  onChangeDatabaseSettingsForm: Dispatch<SetStateAction<DatabaseSettingsForm>>;
   onChangeFileForm: Dispatch<SetStateAction<FileForm>>;
+  onChangeNewProcessingHookKey: Dispatch<SetStateAction<string>>;
   onChangeProviderSettingsForm: Dispatch<SetStateAction<ProviderSettingsForm>>;
   onChangeSection: (section: SettingsSection) => void;
   onChangeTaskRouteDrafts: Dispatch<SetStateAction<Record<string, TaskRouteDraft>>>;
   onChangeUrlForm: Dispatch<SetStateAction<UrlForm>>;
   onFileIngest: () => Promise<void>;
+  onCreateProcessingHook: () => Promise<void>;
+  onDeleteProcessingHook: (hook: ProcessingHookSummary) => Promise<void>;
   onProviderRefresh: () => Promise<void>;
+  onSaveDatabaseSettings: () => Promise<void>;
   onSaveProviderSettings: () => Promise<void>;
   onSaveTaskRoute: (taskKey: string) => Promise<void>;
   onSelectedFile: (file: File | null) => Promise<void>;
+  onSelectedWorkflowFile: (file: File | null) => Promise<void>;
   onUrlIngest: () => Promise<void>;
+  onUseBundledWorkflow: () => Promise<void>;
   onValidateWorkflow: () => Promise<void>;
   providerReadiness: ProviderReadiness | null;
   providerSettings: ProviderSettings | null;
   providerSettingsForm: ProviderSettingsForm;
+  processingHookKeyInFlight: string | null;
   reportActionError: (action: () => Promise<unknown>) => void;
   section: SettingsSection;
   settingsSummary: SettingsSummary | null;
@@ -1266,11 +1408,14 @@ function SettingsWorkspace({
   taskRouteDrafts: Record<string, TaskRouteDraft>;
   urlForm: UrlForm;
   workflowStatus: WorkflowStatus | null;
+  workflowDefinitionSelection: WorkflowDefinitionSelection;
   workflowValidation: WorkflowValidationResult | null;
 }) {
   const sections: { id: SettingsSection; label: string; status?: string }[] = [
+    { id: "database", label: "Database", status: databaseSettings?.ready ? "Ready" : "Blocked" },
     { id: "workflow", label: "Workflow", status: workflowStatus?.active ? "Active" : "Blocked" },
-    { id: "provider", label: "Provider Registry", status: providerSettingsForm.demoProviderMode ? "Demo" : providerSettings?.sources.registryUrl },
+    { id: "provider", label: "Provider Registry", status: providerSettings?.status ?? providerSettings?.sources.registryUrl },
+    { id: "processing-hooks", label: "Processing Hooks", status: `${settingsSummary?.processingHooks.length ?? 0}` },
     { id: "tasks", label: "AI Tasks", status: `${settingsSummary?.taskRoutes.length ?? 0}` },
     { id: "landing", label: "Landing Areas", status: `${settingsSummary?.renderSlots.length ?? 0}` },
     { id: "diagnostics", label: "Diagnostics", status: providerReadiness?.ready ? "Ready" : "Check" },
@@ -1295,16 +1440,85 @@ function SettingsWorkspace({
       </aside>
 
       <section className="settings-detail">
+        {section === "database" ? (
+          <div className="settings-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Database</h2>
+                <p>Configure the local Postgres connection used for workflow, ingest, review, autosave, and provider task history.</p>
+              </div>
+              <span className={databaseSettings?.ready ? "status status-ready" : "status status-blocked"}>
+                {databaseSettings?.ready ? "Ready" : "Blocked"}
+              </span>
+            </div>
+            <form
+              className="database-settings-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                reportActionError(onSaveDatabaseSettings);
+              }}
+            >
+              <label>
+                Database URL
+                <input
+                  value={databaseSettingsForm.databaseUrl}
+                  onChange={(event) =>
+                    onChangeDatabaseSettingsForm((current) => ({ ...current, databaseUrl: event.target.value }))
+                  }
+                  placeholder="postgres://artifact_review:artifact_review@localhost:5432/artifact_review_dev"
+                  spellCheck={false}
+                  type="text"
+                />
+                <small>
+                  {databaseSettings?.restartRequired
+                    ? "Saved value is waiting for app restart."
+                    : settingSourceLabel(databaseSettings?.sources.databaseUrl)}
+                </small>
+              </label>
+              <button className="btn btn-primary" disabled={isPending("database-settings")} type="submit">
+                {isPending("database-settings") ? "Saving" : "Save Database URL"}
+              </button>
+            </form>
+            <div className="settings-summary">
+              <div>
+                <span>Active source</span>
+                <strong>{settingSourceLabel(databaseSettings?.sources.databaseUrl)}</strong>
+              </div>
+              <div>
+                <span>Connection</span>
+                <strong>{databaseSettings?.ready ? "Ready" : databaseSettings?.configured ? "Not ready" : "Not configured"}</strong>
+              </div>
+              <div>
+                <span>Restart</span>
+                <strong>{databaseSettings?.restartRequired ? "Required" : "Not required"}</strong>
+              </div>
+            </div>
+            {databaseSettings?.reason ? <div className="validation invalid">{databaseSettings.reason}</div> : null}
+          </div>
+        ) : null}
+
         {section === "workflow" ? (
           <div className="settings-panel">
             <div className="panel-heading">
               <div>
                 <h2>Workflow</h2>
-                <p>Validate the bundled document workflow, then import and activate it before ingesting documents.</p>
+                <p>Choose a state-workflow JSON definition, validate it, then import and activate it before ingesting documents.</p>
               </div>
               <div className="setup-actions">
+                <label className="btn btn-secondary file-picker-button" aria-disabled={isPending("workflow-file-read")}>
+                  {isPending("workflow-file-read") ? "Opening" : "Choose JSON"}
+                  <input
+                    accept=".json,application/json"
+                    disabled={isPending("workflow-file-read")}
+                    type="file"
+                    onChange={(event) => reportActionError(() => onSelectedWorkflowFile(event.currentTarget.files?.[0] ?? null))}
+                  />
+                </label>
+                <button className="btn btn-secondary" disabled={workflowDefinitionSelection.source === "bundled"} type="button" onClick={() => reportActionError(onUseBundledWorkflow)}>
+                  Use Bundled Fixture
+                </button>
                 <button className="btn btn-secondary" disabled={isPending("workflow-validate")} type="button" onClick={() => reportActionError(onValidateWorkflow)}>
-                  {isPending("workflow-validate") ? "Validating" : "Validate Fixture"}
+                  {isPending("workflow-validate") ? "Validating" : "Validate"}
                 </button>
                 <button className="btn btn-primary" disabled={isPending("workflow-activate")} type="button" onClick={() => reportActionError(onActivateWorkflow)}>
                   {isPending("workflow-activate") ? "Activating" : "Import And Activate"}
@@ -1314,6 +1528,10 @@ function SettingsWorkspace({
             <ReadinessGrid checks={workflowStatus?.readiness.checks ?? []} />
             <div className="workflow-summary">
               <dl>
+                <div>
+                  <dt>Selected definition</dt>
+                  <dd>{workflowDefinitionSelection.label}</dd>
+                </div>
                 <div>
                   <dt>Active workflow</dt>
                   <dd>{workflowStatus?.workflow ? workflowStatus.workflow.id : "None"}</dd>
@@ -1343,73 +1561,173 @@ function SettingsWorkspace({
             <div className="panel-heading">
               <div>
                 <h2>Provider Registry</h2>
-                <p>Configure durable provider runtime defaults and refresh provider readiness.</p>
+                <p>Select the registry profile Artifact Review uses, then inspect the read-only provider catalog for that profile.</p>
               </div>
               <button className="btn btn-secondary" disabled={isPending("provider-refresh")} type="button" onClick={() => reportActionError(onProviderRefresh)}>
-                {isPending("provider-refresh") ? "Refreshing" : "Refresh Providers"}
+                {isPending("provider-refresh") ? "Refreshing" : "Refresh"}
               </button>
             </div>
             <form
-              className="provider-settings-form"
+              className="provider-registry-profile-card"
               onSubmit={(event) => {
                 event.preventDefault();
                 reportActionError(onSaveProviderSettings);
               }}
             >
-              <label>
-                Registry URL
-                <input
-                  value={providerSettingsForm.registryUrl}
-                  onChange={(event) =>
-                    onChangeProviderSettingsForm((current) => ({ ...current, registryUrl: event.target.value }))
-                  }
-                  placeholder="http://127.0.0.1:5181"
-                />
-                <small>{settingSourceLabel(providerSettings?.sources.registryUrl)}</small>
-              </label>
-              <label>
-                Profile
-                <input
-                  value={providerSettingsForm.selectedProviderProfileKey}
-                  onChange={(event) =>
-                    onChangeProviderSettingsForm((current) => ({
-                      ...current,
-                      selectedProviderProfileKey: event.target.value
-                    }))
-                  }
-                  placeholder="profile-key"
-                />
-                <small>{settingSourceLabel(providerSettings?.sources.selectedProviderProfileKey)}</small>
-              </label>
-              <label className="inline-check">
-                <input
-                  checked={providerSettingsForm.demoProviderMode}
-                  type="checkbox"
-                  onChange={(event) =>
-                    onChangeProviderSettingsForm((current) => ({ ...current, demoProviderMode: event.target.checked }))
-                  }
-                />
-                Demo mode
-              </label>
-              <button className="btn btn-primary" disabled={isPending("provider-settings")} type="submit">
-                {isPending("provider-settings") ? "Saving" : "Save Settings"}
-              </button>
+              <div className="task-route-heading">
+                <div>
+                  <strong>Registry profile</strong>
+                  <small>Provider records are managed outside Artifact Review.</small>
+                </div>
+                <span className={providerSettings?.status === "ready" ? "status status-ready" : "status status-blocked"}>
+                  {providerSettings?.status ?? "unknown"}
+                </span>
+              </div>
+              <div className="provider-registry-profile-controls">
+                <label>
+                  Profile
+                  <select
+                    value={providerSettingsForm.selectedProviderProfileKey}
+                    onChange={(event) =>
+                      onChangeProviderSettingsForm((current) => ({
+                        ...current,
+                        selectedProviderProfileKey: event.target.value
+                      }))
+                    }
+                  >
+                    <option value="">Use bootstrap profile</option>
+                    {providerSettings?.activeProfileKey &&
+                    !(providerSettings.profiles ?? []).some((profile) => profile.profileKey === providerSettings.activeProfileKey) ? (
+                      <option value={providerSettings.activeProfileKey}>{providerSettings.activeProfileKey}</option>
+                    ) : null}
+                    {(providerSettings?.profiles ?? []).map((profile) => (
+                      <option value={profile.profileKey} key={profile.profileKey}>
+                        {(profile.displayName ?? profile.profileKey)} ({profile.profileKey})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Source
+                  <input readOnly value={providerSettings?.profileSource ?? providerSettings?.sources.selectedProviderProfileKey ?? "none"} />
+                </label>
+                <label>
+                  Registry URL
+                  <input
+                    value={providerSettingsForm.registryUrl}
+                    onChange={(event) =>
+                      onChangeProviderSettingsForm((current) => ({ ...current, registryUrl: event.target.value }))
+                    }
+                    placeholder="http://127.0.0.1:5181"
+                  />
+                </label>
+                <label className="inline-check">
+                  <input
+                    checked={providerSettingsForm.demoProviderMode}
+                    type="checkbox"
+                    onChange={(event) =>
+                      onChangeProviderSettingsForm((current) => ({ ...current, demoProviderMode: event.target.checked }))
+                    }
+                  />
+                  Demo mode
+                </label>
+                <button className="btn btn-primary" disabled={isPending("provider-settings")} type="submit">
+                  {isPending("provider-settings") ? "Saving" : "Save"}
+                </button>
+              </div>
             </form>
-            <div className="settings-summary">
+            <div className="provider-registry-meta">
               <div>
-                <span>Registry source</span>
-                <strong>{settingSourceLabel(providerSettings?.sources.registryUrl)}</strong>
+                <span>URL</span>
+                <strong>{providerSettings?.registryUrl || "Not configured"}</strong>
               </div>
               <div>
-                <span>Profile source</span>
-                <strong>{settingSourceLabel(providerSettings?.sources.selectedProviderProfileKey)}</strong>
+                <span>Active</span>
+                <strong>{providerSettings?.activeProfileKey || "Not configured"}</strong>
               </div>
               <div>
-                <span>Demo mode</span>
-                <strong>{providerSettingsForm.demoProviderMode ? "Enabled" : "Disabled"}</strong>
+                <span>Bootstrap</span>
+                <strong>{providerSettings?.bootstrapProfileKey || "None"}</strong>
+              </div>
+              <div>
+                <span>Providers</span>
+                <strong>{providerSettings?.providerCount ?? settingsSummary?.providerCatalog.providers.length ?? 0}</strong>
               </div>
             </div>
+            {providerSettings?.activeProfile?.description ? <p>{providerSettings.activeProfile.description}</p> : null}
+            {providerSettings?.error ? <div className="validation invalid">{providerSettings.error}</div> : null}
+            <ProviderRegistryCatalog providerCatalog={settingsSummary?.providerCatalog ?? null} />
             <ReadinessGrid checks={providerReadiness?.checks ?? []} />
+          </div>
+        ) : null}
+
+        {section === "processing-hooks" ? (
+          <div className="settings-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Processing Hooks</h2>
+                <p>Register app-owned hook keys that task routes can dispatch through. Hooks without backend logic remain default no-op.</p>
+              </div>
+              <span className="section-count">{settingsSummary?.processingHooks.length ?? 0} registered</span>
+            </div>
+            <form
+              className="processing-hook-create-card"
+              onSubmit={(event) => {
+                event.preventDefault();
+                reportActionError(onCreateProcessingHook);
+              }}
+            >
+              <label>
+                Hook Key
+                <input
+                  value={newProcessingHookKey}
+                  disabled={isPending("processing-hook-create")}
+                  onChange={(event) => onChangeNewProcessingHookKey(event.target.value)}
+                  placeholder="custom-review-hook"
+                />
+              </label>
+              <button className="btn btn-primary" disabled={isPending("processing-hook-create")} type="submit">
+                {isPending("processing-hook-create") ? "Creating" : "Create Hook"}
+              </button>
+            </form>
+            {(settingsSummary?.processingHooks.length ?? 0) === 0 ? (
+              <div className="empty-state">No processing hooks registered.</div>
+            ) : (
+              <div className="processing-hooks-table" role="table" aria-label="Processing Hooks">
+                <div className="processing-hooks-row processing-hooks-header" role="row">
+                  <div role="columnheader">Hook key</div>
+                  <div role="columnheader">Display name</div>
+                  <div role="columnheader">Status</div>
+                  <div role="columnheader">Tasks</div>
+                  <div role="columnheader">Actions</div>
+                </div>
+                {(settingsSummary?.processingHooks ?? []).map((hook) => (
+                  <div className="processing-hooks-row" role="row" key={hook.hookKey}>
+                    <div role="cell">
+                      <code>{hook.hookKey}</code>
+                    </div>
+                    <div role="cell">{hook.displayName}</div>
+                    <div role="cell">
+                      <span className={hook.implemented ? "status status-ready" : "status status-muted"}>
+                        {hook.statusLabel}
+                      </span>
+                    </div>
+                    <div role="cell">{hook.taskUsageCount}</div>
+                    <div role="cell">
+                      <button
+                        className="btn btn-secondary"
+                        disabled={processingHookKeyInFlight === hook.hookKey || !hook.deletable}
+                        title={hook.deleteBlockedReason ?? `Delete ${hook.displayName}`}
+                        type="button"
+                        onClick={() => reportActionError(() => onDeleteProcessingHook(hook))}
+                      >
+                        {processingHookKeyInFlight === hook.hookKey ? "Deleting" : "Delete"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : null}
 
@@ -1424,6 +1742,10 @@ function SettingsWorkspace({
             <div className="task-route-list">
               {(settingsSummary?.taskRoutes ?? []).map((route) => {
                 const draft = taskRouteDrafts[route.taskKey] ?? taskRouteToDraft(route);
+                const registeredHooks = settingsSummary?.processingHooks ?? [];
+                const selectedHook = registeredHooks.find((hook) => hook.hookKey === draft.hookKey);
+                const selectedHookImplemented = selectedHook?.implemented ?? route.hookReady;
+                const hasSelectedHookOption = registeredHooks.some((hook) => hook.hookKey === draft.hookKey);
                 return (
                   <form
                     className="task-route-card"
@@ -1471,10 +1793,22 @@ function SettingsWorkspace({
                       </label>
                       <label>
                         Hook
-                        <input
+                        <select
                           value={draft.hookKey}
                           onChange={(event) => updateTaskRouteDraft(onChangeTaskRouteDrafts, route.taskKey, { hookKey: event.target.value })}
-                        />
+                        >
+                          {draft.hookKey && !hasSelectedHookOption ? (
+                            <option value={draft.hookKey}>{draft.hookKey} (unregistered)</option>
+                          ) : null}
+                          {registeredHooks.map((hook) => (
+                            <option key={hook.hookKey} value={hook.hookKey}>
+                              {hook.displayName} ({hook.statusLabel})
+                            </option>
+                          ))}
+                        </select>
+                        {selectedHook && !selectedHook.implemented ? (
+                          <small className="field-note">This hook is registered but currently default no-op.</small>
+                        ) : null}
                       </label>
                       <label>
                         Order
@@ -1511,12 +1845,18 @@ function SettingsWorkspace({
                       <label className="inline-check">
                         <input
                           checked={draft.enabled}
+                          disabled={!selectedHookImplemented && !draft.enabled}
                           type="checkbox"
-                          onChange={(event) => updateTaskRouteDraft(onChangeTaskRouteDrafts, route.taskKey, { enabled: event.target.checked })}
+                          onChange={(event) => {
+                            if (event.target.checked && !selectedHookImplemented) {
+                              return;
+                            }
+                            updateTaskRouteDraft(onChangeTaskRouteDrafts, route.taskKey, { enabled: event.target.checked });
+                          }}
                         />
                         Enabled
                       </label>
-                      <button className="btn btn-primary" disabled={isPending("task-route")} type="submit">
+                      <button className="btn btn-primary" disabled={isPending("task-route") || (draft.enabled && !selectedHookImplemented)} type="submit">
                         {isPending("task-route") ? "Saving" : "Save Route"}
                       </button>
                     </div>
@@ -1703,6 +2043,72 @@ function RenderSlotRow({ slot }: { slot: RenderSlotSummary }) {
         {slot.taskKeys.length === 0 ? <small>No assigned tasks</small> : slot.taskKeys.map((taskKey) => <small key={taskKey}>{taskKey}</small>)}
       </div>
     </article>
+  );
+}
+
+function ProviderRegistryCatalog({ providerCatalog }: { providerCatalog: SettingsSummary["providerCatalog"] | null }) {
+  if (!providerCatalog) {
+    return <div className="empty-state">Provider catalog is not available.</div>;
+  }
+
+  if (!providerCatalog.registry.reachable) {
+    return (
+      <div className="provider-catalog-list">
+        <div className="provider-catalog-row">
+          <div>
+            <strong>Provider registry unavailable</strong>
+            <span>{providerCatalog.registry.url || "No registry URL configured"}</span>
+          </div>
+          <span className="status status-blocked">Unavailable</span>
+          {providerCatalog.registry.error ? <p>{providerCatalog.registry.error}</p> : null}
+        </div>
+      </div>
+    );
+  }
+
+  if (providerCatalog.providers.length === 0) {
+    return <div className="empty-state">No providers are available for the selected profile.</div>;
+  }
+
+  return (
+    <div className="provider-catalog-list" aria-label="Provider catalog">
+      {providerCatalog.providers.map((provider) => (
+        <article className="provider-catalog-row" key={provider.providerKey}>
+          <div>
+            <strong>{provider.displayName ?? provider.providerKey}</strong>
+            <span>{provider.providerKey}</span>
+          </div>
+          <span className={provider.enabled === false ? "status status-blocked" : "status status-ready"}>
+            {provider.enabled === false ? "Disabled" : "Enabled"}
+          </span>
+          <dl className="provider-catalog-meta">
+            <div>
+              <dt>Kind</dt>
+              <dd>{provider.providerKind ?? "Unknown"}</dd>
+            </div>
+            <div>
+              <dt>Adapter</dt>
+              <dd>{provider.adapterKey ?? "Default"}</dd>
+            </div>
+            <div>
+              <dt>Model</dt>
+              <dd>{provider.model ?? "Profile default"}</dd>
+            </div>
+            <div>
+              <dt>Health</dt>
+              <dd>{provider.health?.status ?? "Unknown"}</dd>
+            </div>
+          </dl>
+          <div className="capability-chip-list">
+            {provider.externalSend ? <span>External send</span> : null}
+            {(provider.capabilities ?? []).map((capability) => (
+              <span key={capability.key}>{capability.displayName ?? capability.key}</span>
+            ))}
+          </div>
+          {provider.health?.message ? <p>{provider.health.message}</p> : null}
+        </article>
+      ))}
+    </div>
   );
 }
 
@@ -2262,9 +2668,12 @@ function updateTaskRouteDraft(
   }));
 }
 
-function settingSourceLabel(source: ProviderSettings["sources"]["registryUrl"] | undefined) {
+function settingSourceLabel(source: ProviderSettings["sources"]["registryUrl"] | DatabaseSettings["sources"]["databaseUrl"] | undefined) {
   if (source === "saved") {
     return "Saved in app settings";
+  }
+  if (source === "local-env") {
+    return "Saved in .env";
   }
   if (source === "env") {
     return "Using environment default";

@@ -14,10 +14,14 @@ Artifact Review uses a local TypeScript service as the only HTTP API boundary fo
 | `GET` | `/api/provider-settings` | Returns effective provider runtime settings and whether each value came from saved app settings, environment bootstrap, or neither. |
 | `PUT` | `/api/provider-settings` | Saves non-secret provider runtime settings: registry URL, selected profile key, and explicit deterministic demo mode. Requires `DATABASE_URL`. |
 | `GET` | `/api/workflow/status` | Returns active document workflow status, active workflow summary, and workflow readiness. |
-| `GET` | `/api/settings` | Returns the service-backed Settings summary: provider registry settings, workflow status, combined readiness, task routes, predefined render slots, and recent task runs. |
+| `GET` | `/api/settings` | Returns the service-backed Settings summary: database settings, provider registry settings/catalog, processing hooks, workflow status, combined readiness, task routes, predefined render slots, and recent task runs. |
+| `GET` | `/api/settings/database` | Returns effective and saved database URL state, source, database readiness, local `.env` path, and whether a restart is required. |
+| `PATCH` | `/api/settings/database` | Writes `DATABASE_URL` to local `.env` and returns a refreshed Settings summary. Changed database connections require an app restart before they become active. |
 | `GET` | `/api/settings/readiness` | Returns combined Settings readiness for database, workflow, and provider runtime state. |
 | `PATCH` | `/api/settings/provider-registry` | Saves non-secret provider registry/profile/demo settings and returns a refreshed Settings summary. Requires `DATABASE_URL`. |
 | `POST` | `/api/settings/providers/refresh` | Recomputes provider readiness and returns provider settings plus a refreshed Settings summary without mutating saved settings. |
+| `POST` | `/api/settings/processing-hooks` | Creates an app-owned processing hook key with default no-op policy. Requires `DATABASE_URL`. |
+| `DELETE` | `/api/settings/processing-hooks/:hookKey` | Deletes an unused processing hook. Hooks referenced by task routes are blocked with `409 processing_hook_in_use`. Requires `DATABASE_URL`. |
 | `GET` | `/api/settings/render-slots` | Lists predefined Artifact Review landing areas with current task assignments and ready-action counts. |
 | `GET` | `/api/settings/render-slots/:slot/actions` | Lists provider task actions for a predefined render slot, sorted by display order and readiness. |
 | `GET` | `/api/settings/task-runs` | Lists recent provider task runs for Settings diagnostics. |
@@ -62,10 +66,12 @@ These routes are reserved by the MVP plan and should be implemented incrementall
 - Provider output must never directly mutate document text. Provider invocation creates proposed suggestions only.
 - Provider readiness checks the selected profile, registry profile/provider lookup, task definition, prompt version, structured output schema, processing hook, required provider capability, local secret availability, adapter availability, no-fallback policy, and deterministic demo mode.
 - Provider settings can be configured in the app and are persisted in `app_settings`. Saved provider registry URL, selected provider profile, and demo mode take precedence over first-run environment values.
-- Settings is the primary setup surface. It exposes Workflow, Provider Registry, AI Tasks, Landing Areas, Diagnostics, and Ingest sections from service-backed summary data.
+- Settings is the primary setup surface. It exposes Database, Workflow, Provider Registry, Processing Hooks, AI Tasks, Landing Areas, Diagnostics, and Ingest sections from service-backed summary data.
+- Provider Registry is a profile-and-catalog screen: users can choose the active registry profile and inspect read-only providers from the shared registry, but Artifact Review does not own provider records.
+- Processing Hooks is the app-owned hook configuration surface. New hooks are created as `default_noop`; task routes can select registered hooks, but enabling a route through a no-op hook is rejected until backend logic exists.
 - Selected provider profile precedence is saved `selectedProviderProfileKey` first, then first-run `INVOKE_PROVIDERS_PROFILE`; a saved missing profile must block provider-backed actions instead of falling back.
 - Predefined render slots are `component.inline.aiSuggest`, `component.inline.textTools`, `component.drawer.noteDraft`, `section.toolbar`, `document.toolbar`, `document.footer`, and `admin.diagnostics`. Custom user-created slots are deferred.
-- Task route saves validate render slots against the predefined registry and validate hook keys against registered processing hooks. Provider/runtime readiness is returned after save so the UI can show blockers without treating frontend state as authoritative.
+- Task route saves validate render slots against the predefined registry and validate hook keys against registered processing hooks. A task route cannot be enabled when its selected hook is registered but unimplemented. Provider/runtime readiness is returned after save so the UI can show blockers without treating frontend state as authoritative.
 - Component inline AI Suggest is selected from `GET /api/settings/render-slots/component.inline.aiSuggest/actions`; AI output remains proposal-only until the user explicitly accepts a suggestion.
 - Deterministic provider behavior is available only when explicit demo mode is enabled through saved app settings or `ARTIFACT_REVIEW_DEMO_PROVIDER_MODE=true`; real registry provider adapter execution requires a reachable registry profile, a selected provider with a registered adapter, and any required local secret reference.
 - Provider settings saves accept `{ registryUrl: string | null, selectedProviderProfileKey: string | null, demoProviderMode: boolean }`; raw provider secrets must never be saved through this endpoint.
