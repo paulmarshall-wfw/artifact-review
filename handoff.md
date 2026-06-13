@@ -4,11 +4,11 @@
 
 - Project name: Artifact Review
 - Handoff type: implementation handoff
-- Updated timestamp UTC: 2026-06-13T01:41:00Z
+- Updated timestamp UTC: 2026-06-13T01:56:00Z
 - Prepared by: Codex
 - Repository, workspace, or folder: `/Users/paulmarshall/Software Development/artifact-review`
 - Branch or working context: Git branch `main`; current HEAD `63446d3`
-- Session scope: full provider registry and `invoke-providers-for-tasks` runtime support.
+- Session scope: separate Settings tab for durable provider configuration.
 
 ### Checkpoint Status
 
@@ -16,48 +16,31 @@
 - Working tree: dirty
 - Dirty files intentionally in scope:
   - `README.md`
-  - `docs/api-contract.md`
   - `docs/completed-tasks.md`
-  - `docs/data-model.md`
-  - `docs/implementation-sequence.md`
   - `docs/setup-readiness.md`
   - `handoff.md`
-  - `package-lock.json`
-  - `package.json`
-  - `service/src/http/server.ts`
-  - `service/src/providers/readiness.ts`
-  - `service/src/providers/registry.ts`
-  - `tests/provider-readiness.test.ts`
-- New files intentionally in scope:
-  - `service/src/providers/runtime.ts`
+  - `src/App.tsx`
+  - `src/styles.css`
 - Last verification:
   - `npm run verify`: passed
   - `npm run lint`: passed as part of verify
   - `npm test`: passed with 10 test files, 1 skipped Postgres suite, 42 tests passed, and 2 skipped
   - `npm run build`: passed as part of verify
-  - Chrome smoke: passed against `http://127.0.0.1:5182/`; Providers panel rendered expected setup blockers and Chrome reported no console errors
-  - `npm run tauri:dev`: compiled and launched the macOS `artifact-review` app
-  - Desktop service health: passed outside the sandbox at `http://127.0.0.1:4793/health`
+  - Chrome smoke: passed against `http://127.0.0.1:5182/`; nav included Settings, Providers no longer contained the settings form, Settings contained the form, and Chrome reported no console errors
 - Windows smoke validation: pending; not runnable from this macOS workspace.
 - Next checkpoint action: leave dirty intentionally unless the user asks to commit.
 
 ## 2. Executive Summary
 
-Artifact Review now includes the full local numbered `invoke-providers-for-tasks` package family and routes provider-backed suggestions through the shared runtime path.
+Artifact Review now has a separate Settings navigation item for durable app configuration.
 
 Completed now:
 
-- Installed local file dependencies:
-  - `@invoke-providers/core@0.1.0`
-  - `@invoke-providers/client@0.1.0`
-  - `@invoke-providers/adapters@0.1.0`
-  - `@invoke-providers/react@0.1.0`
-  - `@invoke-providers/registry@0.1.0`
-- Switched registry lookup to the shared `RemoteRegistryClient` from `@invoke-providers/client`.
-- Added registered adapter detection to provider readiness.
-- Added `service/src/providers/runtime.ts` to own provider adapters, secret-resolution behavior, `invoke-providers-for-tasks` invocation, structured output validation, task-run mapping, and proposal-only suggestion output.
-- Routed `POST /api/components/:componentId/ai-suggestions` through the provider runtime instead of hand-building the demo response in the HTTP route.
-- Kept explicit demo mode on the same invocation path through an app-owned deterministic adapter.
+- Added `Settings` to the primary sidebar navigation.
+- Moved provider registry URL, selected profile, and demo-mode controls out of Providers.
+- Kept Providers focused on readiness diagnostics.
+- Added a compact Settings summary for registry source, profile source, and demo-mode state.
+- Updated setup docs and README wording to point users to Settings for provider runtime configuration.
 
 Still incomplete or blocked:
 
@@ -69,10 +52,9 @@ Still incomplete or blocked:
 Working:
 
 - `npm run verify` passes.
-- Provider settings remain configurable in the Providers panel.
-- Provider readiness now distinguishes missing registry/profile/secret/capability from missing adapter registration.
-- Demo AI suggestions still work, but now through `invoke-providers-for-tasks` runtime invocation.
-- Real OpenAI-compatible registry providers can execute when their registry profile selects a supported adapter and required local secret is available.
+- Settings is present as a separate nav target.
+- Provider settings remain backed by existing `GET /api/provider-settings` and `PUT /api/provider-settings`.
+- Provider readiness remains visible in Providers.
 - Raw provider secrets are not stored in Postgres.
 
 Not yet verified:
@@ -95,27 +77,17 @@ Not yet verified:
 Most recent verified commands:
 
 - `npm run verify`: passed with 10 test files, 1 skipped Postgres suite, 42 tests passed, and 2 skipped; Vite production build passed.
-- Focused tests: `npm test -- tests/provider-readiness.test.ts tests/http-review.test.ts` passed with 11 tests.
-- Chrome smoke against `http://127.0.0.1:5182/`: passed; Providers panel rendered expected setup/provider blockers without `DATABASE_URL`, and Chrome console errors were empty.
-- `npm run tauri:dev`: launched the macOS desktop shell.
-- `curl -sS http://127.0.0.1:4793/health`: passed outside the sandbox while `npm run tauri:dev` was running.
+- Chrome smoke against `http://127.0.0.1:5182/`: passed; Settings nav and settings form placement were verified, and Chrome console errors were empty.
 
 Environment notes:
 
-- `DATABASE_URL` was unset for browser and desktop validation, so the expected database/setup blockers rendered.
-- The sandboxed loopback probe to `127.0.0.1:4793` failed while the desktop service was running, but the same health check passed outside the sandbox.
+- `DATABASE_URL` was unset for browser validation, so expected database/setup blockers rendered.
 
 ## 6. Files to Open First
 
-- `AGENTS.md`: project constraints and commands.
-- `service/src/providers/runtime.ts`: provider runtime adapters and invocation path.
-- `service/src/providers/readiness.ts`: readiness checks and registered adapter behavior.
-- `service/src/providers/registry.ts`: shared registry client lookup.
-- `service/src/http/server.ts`: AI suggestion endpoint using provider runtime invocation.
-- `tests/provider-readiness.test.ts`: adapter readiness coverage.
-- `tests/http-review.test.ts`: AI suggestion endpoint coverage.
-- `docs/api-contract.md`: current service endpoints and provider invocation behavior.
-- `docs/setup-readiness.md`: setup blockers and in-app provider settings behavior.
+- `src/App.tsx`: Settings nav item and Settings section.
+- `src/styles.css`: Settings summary and responsive nav layout.
+- `docs/setup-readiness.md`: in-app Settings documentation.
 - `docs/completed-tasks.md`: append-only completed work ledger.
 
 ## 7. Next Actions
@@ -128,4 +100,4 @@ Next:
 
 ## 8. Ready-Made Prompt for Starting a New Thread
 
-Read `handoff.md` as the hot-context source for `/Users/paulmarshall/Software Development/artifact-review`. Treat the current dirty tree as intentional and do not reset or discard changes. Continue from the full provider registry/runtime support slice. Provider runtime dependencies are installed; next validation is live registry-backed provider execution with a configured profile and local secret reference, then database-backed Chrome validation and Windows smoke. Do not commit, release, package, publish, or discuss distribution unless explicitly approved.
+Read `handoff.md` as the hot-context source for `/Users/paulmarshall/Software Development/artifact-review`. Treat the current dirty tree as intentional and do not reset or discard changes. Continue from the Settings-tab split for durable provider configuration. Settings now owns provider registry/profile/demo-mode controls; Providers is readiness-only. Do not commit, release, package, publish, or discuss distribution unless explicitly approved.

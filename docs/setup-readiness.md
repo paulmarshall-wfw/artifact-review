@@ -29,9 +29,9 @@ Copy `.env.example` to `.env` and fill values appropriate for local development.
 | `GET /api/provider-settings` | Effective provider registry URL, selected profile, demo mode, and value sources. |
 | `PUT /api/provider-settings` | Saves non-secret provider runtime settings in app settings. |
 
-## In-App Provider Settings
+## In-App Settings
 
-The Providers panel can save:
+The Settings section can save:
 
 - provider registry URL
 - selected provider profile key

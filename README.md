@@ -44,7 +44,7 @@ INVOKE_PROVIDERS_REGISTRY_URL=http://127.0.0.1:5181
 INVOKE_PROVIDERS_PROFILE=<profile-key>
 ```
 
-The provider registry URL, selected profile, and deterministic demo mode can be configured in the app. Environment values are first-run bootstrap defaults; saved provider settings take priority. Raw provider secrets remain outside Postgres.
+The provider registry URL, selected profile, and deterministic demo mode can be configured in the app's Settings section. Environment values are first-run bootstrap defaults; saved provider settings take priority. Raw provider secrets remain outside Postgres.
 
 ## Commands
 

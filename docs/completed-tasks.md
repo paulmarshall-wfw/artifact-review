@@ -4,6 +4,11 @@ Append brief entries here when project work is completed. Keep this file concise
 
 ## 2026-06-13
 
+- Task: Split durable provider configuration into a separate Settings tab.
+  Outcome: Added a Settings navigation item, moved provider registry/profile/demo-mode controls out of Providers, kept Providers focused on readiness diagnostics, and added a compact settings summary for current source/effective state.
+  Verification: `npm run verify` passed with 10 test files, 1 skipped Postgres suite, 42 tests passed, and 2 skipped; Vite production build passed. Chrome smoke against `http://127.0.0.1:5182/` confirmed the Settings nav item exists, Providers no longer contains the settings form, Settings contains the form, and Chrome reported no console errors.
+  Traceability: Git branch `main` at `63446d3`; no commit yet; changed `README.md`, `src/App.tsx`, `src/styles.css`, setup docs, completed-task ledger, and handoff.
+
 - Task: Include full provider registry and `invoke-providers-for-tasks` runtime support.
   Outcome: Installed the full local numbered `@invoke-providers/*@0.1.0` package family, switched registry lookup to `@invoke-providers/client`, added registered adapter detection, and routed `suggest-component-revision` through `invoke-providers-for-tasks` invocation, structured output validation, app-owned task-run persistence, and proposal-only AI suggestion storage. Explicit demo mode now uses the same invocation path through a local deterministic adapter; real registry providers can run when registry/profile, adapter, and local secret readiness pass.
   Verification: `npm run verify` passed with 10 test files, 1 skipped Postgres suite, 42 tests passed, and 2 skipped; Vite production build passed. Chrome smoke against `http://127.0.0.1:5182/` passed for the Providers panel with expected setup blockers and no console errors. `npm run tauri:dev` compiled and launched the macOS app; service health passed outside the sandbox at `http://127.0.0.1:4793/health`.

@@ -646,6 +646,7 @@ export function App() {
           <a className="nav-item" href="#workflow">Workflow</a>
           <a className="nav-item" href="#ingest">Ingest</a>
           <a className="nav-item" href="#providers">Providers</a>
+          <a className="nav-item" href="#settings">Settings</a>
         </nav>
         <section className="document-nav" aria-label="Documents">
           <div className="side-heading">Documents</div>
@@ -758,6 +759,29 @@ export function App() {
             <strong>Readiness</strong>
             <p>Provider actions remain blocked until registry/profile readiness passes.</p>
           </div>
+          <div className="readiness-grid wide">
+            {setupReadiness?.checks.map((item) => (
+              <div className="readiness-item" key={item.key}>
+                <span>{item.label}</span>
+                <StatusPill item={item} />
+              </div>
+            ))}
+          </div>
+          <div className="readiness-grid wide">
+            {providerReadiness?.checks.map((item) => (
+              <div className="readiness-item" key={item.key}>
+                <span>{item.label}</span>
+                <StatusPill item={item} />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="setup-strip settings-strip" id="settings">
+          <div>
+            <strong>Settings</strong>
+            <p>Configure durable provider runtime defaults for this app.</p>
+          </div>
           <form
             className="provider-settings-form"
             onSubmit={(event) => {
@@ -804,21 +828,19 @@ export function App() {
               {isPending("provider-settings") ? "Saving" : "Save"}
             </button>
           </form>
-          <div className="readiness-grid wide">
-            {setupReadiness?.checks.map((item) => (
-              <div className="readiness-item" key={item.key}>
-                <span>{item.label}</span>
-                <StatusPill item={item} />
-              </div>
-            ))}
-          </div>
-          <div className="readiness-grid wide">
-            {providerReadiness?.checks.map((item) => (
-              <div className="readiness-item" key={item.key}>
-                <span>{item.label}</span>
-                <StatusPill item={item} />
-              </div>
-            ))}
+          <div className="settings-summary">
+            <div>
+              <span>Registry source</span>
+              <strong>{settingSourceLabel(providerSettings?.sources.registryUrl)}</strong>
+            </div>
+            <div>
+              <span>Profile source</span>
+              <strong>{settingSourceLabel(providerSettings?.sources.selectedProviderProfileKey)}</strong>
+            </div>
+            <div>
+              <span>Demo mode</span>
+              <strong>{providerSettingsForm.demoProviderMode ? "Enabled" : "Disabled"}</strong>
+            </div>
           </div>
         </section>
 
