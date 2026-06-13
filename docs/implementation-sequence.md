@@ -42,6 +42,7 @@ Completed:
 
 - Implement workflow definition validation.
 - Implement explicit activation storage for a user-provided document workflow.
+- Add React workflow setup UI for validating and importing/activating the repo-stored fixture.
 - Add service endpoints for active workflow status and allowed document actions.
 - Add service-side transition rejection for actions not allowed from the document's current state.
 - Add HTTP-level tests for workflow validation, activation, allowed actions, and invalid transition rejection.
@@ -68,10 +69,11 @@ Completed:
 - Add repository-backed URL snapshot document/version/component creation using the HTML parser, including caller-supplied snapshot HTML and service-side URL fetch paths.
 - Autosave staged review changes.
 - Add review-mutation autosave snapshots that preserve component IDs, source mappings, original text hashes, and imported source snapshots.
+- Wire React file and URL ingest forms to the service and block them until an active workflow exists.
 
 Remaining:
 
-- UI ingest wiring and desktop validation.
+- Desktop validation.
 
 ## Build Slice 4: Review Mutation Surface
 
@@ -85,10 +87,10 @@ Completed:
 - Implement save as a durable document version that preserves the imported source snapshot and stores JSON review-state `current_snapshot` data.
 - Return compact document rows separately from full document/component/review data.
 - Preserve audit history for text mutations.
+- Wire the React review workspace to document list/detail, component text edits, annotations, questions, evidence, highlights, autosave status, workflow actions, and save.
 
 Remaining:
 
-- Wire these service endpoints into the React review workspace.
 - Keep same-format output reconstruction in Build Slice 6 export.
 
 ## Build Slice 5: Provider-Backed Suggestions

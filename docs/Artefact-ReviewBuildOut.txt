@@ -1,0 +1,31 @@
+Artefact-Review
+
+React API Wiring
+Add client calls/types for documents, document detail, ingest, review mutations, autosave, save, workflow actions, readiness, and provider readiness.
+
+Workflow Setup UI
+Build the UI to validate/import/activate the document workflow fixture. Ingest should stay blocked until an active workflow exists.
+
+Document Ingest UI
+Wire file ingest for txt, md, html, htm, plus URL snapshot ingest. Include setup blockers, loading/error states, and document creation flow.
+
+Review Workspace UI
+Render document list/detail, sections/components, search/focus/expand-collapse, inline review controls, drawer/detail state, workflow state/actions, autosave state, and save.
+
+State Workflow Runtime Adapter
+Replace the current app-owned workflow derivation with state-workflow-runtime storage/runtime integration once dependency installation is explicitly approved.
+
+Provider-Backed Suggestions
+Wire registry-backed readiness, selected profile handling, task definitions, prompt versions, schemas, hooks, and suggest-component-revision so AI output creates proposed ai_suggestions only.
+
+Suggestion Accept/Reject
+Implement accept/reject endpoints and UI. Accept should create audited component revisions; reject should preserve history without mutating component text.
+
+Export
+Implement same-format export for txt, md, html, and URL snapshots, plus optional JSON review bundle. Tauri should only handle destination selection and reveal-in-folder.
+
+Browser And Desktop Validation
+Run Chrome smoke checks, then npm run tauri:dev on macOS, then Windows smoke validation before any distribution discussion.
+
+Release/Distribution Work
+   Still out of scope unless explicitly requested: packaging, tags, published images, installers, or release artifacts.

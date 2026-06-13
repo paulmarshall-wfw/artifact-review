@@ -4,6 +4,11 @@ Append brief entries here when project work is completed. Keep this file concise
 
 ## 2026-06-12
 
+- Task: Build React API wiring and workflow setup UI.
+  Outcome: Replaced the static review mock with typed React client calls and a service-backed workspace for setup readiness, provider readiness, workflow status, fixture validation/import/activation, workflow action rendering/execution, document list/detail, file and URL ingest, component text autosave, annotations, questions, evidence, highlights, and document save. Ingest controls now stay disabled until an active document workflow exists.
+  Verification: `npm run lint` passed; `npm run verify` passed with 7 test files, 1 skipped Postgres suite, 28 tests passed, and 2 skipped; Vite production build passed. Local dev server reported startup on `http://127.0.0.1:5182/` with service on `127.0.0.1:4793`, but separate sandboxed curl checks could not connect to those loopback ports.
+  Traceability: Git branch `main` at `541bf88`; no commit yet; changed `src/lib/api.ts`, `src/App.tsx`, `src/styles.css`, implementation ledger docs, and handoff.
+
 - Task: Continue the next three app build slices with autosave, review mutations, and save promotion.
   Outcome: Added a review repository and service endpoints for component text edits, annotations, questions, evidence, highlights, mutation autosave snapshots, and document save-to-version promotion. Component edits now create audited `component_revisions`, review mutations create `autosave_snapshots` without touching imported source snapshots, document detail returns review records, and save creates a new review-state version while preserving the original source snapshot.
   Verification: `npm run verify` passed with 7 test files, 1 skipped Postgres suite, 28 tests passed, and 2 skipped; lint and Vite build also passed.
