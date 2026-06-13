@@ -482,6 +482,43 @@ dd {
   padding-top: 0.75rem;
 }
 
+.suggestion-panel {
+  border-top: 1px solid #e2e7ef;
+  display: grid;
+  gap: 0.6rem;
+  padding-top: 0.75rem;
+}
+
+.suggestion-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.suggestion-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.suggestion-card {
+  border: 1px solid #d8dee8;
+  border-radius: 6px;
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.65rem;
+}
+
+.suggestion-card p,
+.suggestion-card small {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.suggestion-card small {
+  color: #647184;
+}
+
 .status {
   border-radius: 999px;
   font-size: 0.78rem;

@@ -15,7 +15,7 @@ Artifact Review uses a local TypeScript service as the only HTTP API boundary fo
 | `POST` | `/api/workflow/definitions/validate` | Validates a user-provided document workflow definition without activating it. |
 | `POST` | `/api/workflow/activate` | Validates and stores a user-provided active document workflow when `DATABASE_URL` is configured. |
 | `GET` | `/api/documents` | Returns repository-backed document summaries when `DATABASE_URL` is configured; otherwise returns an empty list. |
-| `GET` | `/api/documents/:documentId` | Returns repository-backed document, versions, review components, annotations, questions, evidence, and highlights when present; otherwise returns `404 document_not_found`. |
+| `GET` | `/api/documents/:documentId` | Returns repository-backed document, versions, review components, annotations, questions, evidence, highlights, and AI suggestions when present; otherwise returns `404 document_not_found`. |
 | `GET` | `/api/workflow/documents/:documentId/actions` | Returns backend-derived visible user actions for the document's current workflow state. |
 | `POST` | `/api/workflow/documents/:documentId/actions/:actionId` | Executes an allowed visible user workflow action and updates the document state. |
 | `POST` | `/api/ingest/file` | Ingests `txt`, `md`, `html`, and `htm` file payloads into a document, first version, review components, and the active workflow entry state when database and workflow are configured. |
@@ -26,7 +26,7 @@ Artifact Review uses a local TypeScript service as the only HTTP API boundary fo
 | `POST` | `/api/components/:componentId/evidence` | Adds source/link/repo path/screenshot/note evidence and records an autosave snapshot. |
 | `PATCH` | `/api/components/:componentId/highlight` | Enables or disables component highlight state and records an autosave snapshot. |
 | `POST` | `/api/documents/:documentId/save` | Promotes current reviewed state to a new durable document version while preserving the imported source snapshot. |
-| `POST` | `/api/components/:componentId/ai-suggestions` | Blocks when provider readiness fails; otherwise returns `501 provider_runtime_not_wired`. |
+| `POST` | `/api/components/:componentId/ai-suggestions` | Blocks when provider readiness fails; in explicit deterministic demo mode validates `suggest-component-revision` output, writes a task run, and stores a proposed `ai_suggestions` record without mutating component text. |
 | `POST` | `/api/ai-suggestions/:suggestionId/accept` | Returns `501 suggestion_accept_not_wired`. |
 | `POST` | `/api/ai-suggestions/:suggestionId/reject` | Returns `501 suggestion_reject_not_wired`. |
 | `GET` | `/api/task-runs/:taskRunId` | Returns repository-backed task-run provenance when present; otherwise returns `404 task_run_not_found`. |
@@ -49,6 +49,9 @@ These routes are reserved by the MVP plan and should be implemented incrementall
 - Unimplemented reserved behavior should use `501` with a stable `error` code.
 - Missing records should use `404` with the missing resource ID when safe.
 - Provider output must never directly mutate document text. Provider invocation creates proposed suggestions only.
+- Provider readiness checks the selected profile, registry profile/provider lookup, task definition, prompt version, structured output schema, processing hook, required provider capability, local secret availability, adapter availability, no-fallback policy, and deterministic demo mode.
+- Selected provider profile precedence is saved `selectedProviderProfileKey` first, then first-run `INVOKE_PROVIDERS_PROFILE`; a saved missing profile must block provider-backed actions instead of falling back.
+- Deterministic provider behavior is available only when `ARTIFACT_REVIEW_DEMO_PROVIDER_MODE=true`; real registry provider adapter execution remains blocked until provider runtime adapters are installed.
 - Workflow state must be returned by the service and must not be inferred as durable truth in React.
 - Workflow validation failures return `422` with `valid: false` and stable error strings.
 - Workflow action execution rejects invalid transitions with `409 workflow_action_not_allowed`.

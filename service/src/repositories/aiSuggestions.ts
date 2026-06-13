@@ -77,6 +77,30 @@ export class AiSuggestionsRepository {
     return result.rows[0] ? mapSuggestion(result.rows[0]) : null;
   }
 
+  async listSuggestionsForDocument(documentId: string): Promise<AiSuggestion[]> {
+    const result = await this.db.query<AiSuggestionRow>(
+      `
+        select
+          ai_suggestions.id,
+          ai_suggestions.component_id,
+          ai_suggestions.task_run_id,
+          ai_suggestions.proposed_text,
+          ai_suggestions.rationale,
+          ai_suggestions.confidence,
+          ai_suggestions.warnings,
+          ai_suggestions.status,
+          ai_suggestions.created_at,
+          ai_suggestions.decided_at
+        from ai_suggestions
+        join review_components on review_components.id = ai_suggestions.component_id
+        where review_components.document_id = $1
+        order by ai_suggestions.created_at desc, ai_suggestions.id asc
+      `,
+      [documentId]
+    );
+    return result.rows.map(mapSuggestion);
+  }
+
   async setSuggestionStatus(suggestionId: string, status: AiSuggestionStatus): Promise<AiSuggestion | null> {
     const result = await this.db.query<AiSuggestionRow>(
       `

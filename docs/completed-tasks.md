@@ -4,6 +4,16 @@ Append brief entries here when project work is completed. Keep this file concise
 
 ## 2026-06-13
 
+- Task: Refresh completed-task ledger and handoff after provider-suggestion slice.
+  Outcome: Confirmed the provider-suggestion slice entry is present, refreshed `handoff.md` as the current dirty-tree checkpoint, and kept completed work history in `docs/completed-tasks.md` instead of duplicating it in the handoff.
+  Verification: `git status --short --branch`, current `handoff.md`, and current `docs/completed-tasks.md` inspection completed; no build or test commands rerun because this was a documentation-only continuity refresh.
+  Traceability: Git branch `main` at `fd500fb`; changed `docs/completed-tasks.md` and `handoff.md`.
+
+- Task: Build provider-backed suggestions proposal slice.
+  Outcome: Added numbered provider task asset migration `003_provider_task_assets.sql`, registry/profile/provider readiness lookup, selected-profile precedence, provider task asset repository reads, structured `suggest-component-revision` validation, deterministic demo-mode task-run creation, proposed-only `ai_suggestions` storage, and React inspector UI for creating and viewing proposed suggestions without mutating component text.
+  Verification: `npm run verify` passed with 7 test files, 1 skipped Postgres suite, 31 tests passed, and 2 skipped; Vite production build passed. Chrome smoke validation opened `http://127.0.0.1:5182/`, confirmed provider/task blockers and ingest blocking render correctly without `DATABASE_URL`, and found no Chrome console errors.
+  Traceability: Git branch `main` at `fd500fb`; no commit yet; changed provider readiness/runtime service code, provider task migration/repository code, React API/UI code, focused tests, API/data/setup/sequence docs, completed-task ledger, and handoff.
+
 - Task: Build document ingest and review workspace UI slices.
   Outcome: Added browser file selection for `txt`, `md`, `html`, and `htm` ingest, preserved URL snapshot ingest, kept ingest blocked until the backend reports an active workflow, and expanded the review workspace with component search, section grouping, expand/collapse controls, selected-component focus, inline detail/highlight controls, an open/closed detail drawer, visible autosave draft state, and backend-rendered workflow actions.
   Verification: `npm run verify` passed with 7 test files, 1 skipped Postgres suite, 28 tests passed, and 2 skipped; Vite production build passed.

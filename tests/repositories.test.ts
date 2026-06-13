@@ -7,6 +7,7 @@ import { loadMigrationFiles } from "../service/src/db/migrations";
 import { AiSuggestionsRepository } from "../service/src/repositories/aiSuggestions";
 import { AppSettingsRepository } from "../service/src/repositories/appSettings";
 import { DocumentsRepository } from "../service/src/repositories/documents";
+import { ProviderTasksRepository } from "../service/src/repositories/providerTasks";
 import { TaskRunsRepository } from "../service/src/repositories/taskRuns";
 import type { Queryable } from "../service/src/repositories/types";
 
@@ -188,5 +189,34 @@ describe("repositories", () => {
       confidence: 0.875,
       status: "proposed"
     });
+  });
+
+  it("maps provider task assets for readiness and invocation", async () => {
+    const db = createQueuedDatabase([
+      [
+        {
+          task_key: "suggest-component-revision",
+          provider_key: null,
+          required_capability: "llm.generateJson",
+          prompt_version: "0.1.0",
+          render_slot: "component.inline.aiSuggest",
+          hook_key: "store-ai-suggestion",
+          prompt: { name: "suggest-component-revision" },
+          schema_version: "0.1.0",
+          schema: { type: "object" },
+          hook_implementation_key: "store-ai-suggestion",
+          hook_policy: "block_when_missing"
+        }
+      ]
+    ]);
+
+    await expect(new ProviderTasksRepository(db).getTaskAsset("suggest-component-revision")).resolves.toMatchObject({
+      taskKey: "suggest-component-revision",
+      requiredCapability: "llm.generateJson",
+      promptVersion: "0.1.0",
+      hookImplementationKey: "store-ai-suggestion"
+    });
+    expect(db.queries[0]?.text).toContain("from task_definitions");
+    expect(db.queries[0]?.values).toEqual(["suggest-component-revision"]);
   });
 });

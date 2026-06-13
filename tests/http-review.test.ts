@@ -254,4 +254,82 @@ describe("review mutation HTTP endpoints", () => {
       highlights: [{ componentId: "component-1", enabled: true }]
     });
   });
+
+  it("stores AI output as a proposed suggestion without mutating component text", async () => {
+    const db = createQueuedDatabase([
+      [],
+      [
+        {
+          task_key: "suggest-component-revision",
+          provider_key: null,
+          required_capability: "llm.generateJson",
+          prompt_version: "0.1.0",
+          render_slot: "component.inline.aiSuggest",
+          hook_key: "store-ai-suggestion",
+          prompt: { name: "suggest-component-revision" },
+          schema_version: "0.1.0",
+          schema: { type: "object" },
+          hook_implementation_key: "store-ai-suggestion",
+          hook_policy: "block_when_missing"
+        }
+      ],
+      [componentRow],
+      [
+        {
+          id: "task-run-1",
+          task_key: "suggest-component-revision",
+          provider_key: "artifact-review-demo",
+          provider_profile_key: "demo",
+          prompt_version: "0.1.0",
+          status: "succeeded",
+          validation_status: "valid",
+          external_send: false,
+          latency_ms: 12,
+          provenance: { providerRuntime: "deterministic-demo" },
+          created_at: now
+        }
+      ],
+      [
+        {
+          id: "suggestion-1",
+          component_id: "component-1",
+          task_run_id: "task-run-1",
+          proposed_text: "Original sentence.",
+          rationale: "No substantive rewrite was needed; the proposal preserves the current component text.",
+          confidence: "0.620",
+          warnings: [],
+          status: "proposed",
+          created_at: now,
+          decided_at: null
+        }
+      ]
+    ]);
+
+    const response = await requestApp(
+      createTestServer(db, { ARTIFACT_REVIEW_DEMO_PROVIDER_MODE: "true" }),
+      "POST",
+      "/api/components/component-1/ai-suggestions"
+    );
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      suggestion: {
+        id: "suggestion-1",
+        componentId: "component-1",
+        taskRunId: "task-run-1",
+        status: "proposed"
+      },
+      taskRun: {
+        id: "task-run-1",
+        taskKey: "suggest-component-revision",
+        validationStatus: "valid",
+        externalSend: false
+      }
+    });
+    const queryText = db.queries.map((query) => query.text).join("\n");
+    expect(queryText).toContain("insert into task_runs");
+    expect(queryText).toContain("insert into ai_suggestions");
+    expect(queryText).not.toContain("update review_components");
+    expect(queryText).not.toContain("component_revisions");
+  });
 });

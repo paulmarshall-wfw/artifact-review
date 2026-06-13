@@ -142,6 +142,35 @@ export type Highlight = {
   updatedAt: string;
 };
 
+export type AiSuggestionStatus = "proposed" | "accepted" | "rejected";
+
+export type AiSuggestion = {
+  id: string;
+  componentId: string;
+  taskRunId: string | null;
+  proposedText: string;
+  rationale: string;
+  confidence: number;
+  warnings: JsonValue;
+  status: AiSuggestionStatus;
+  createdAt: string;
+  decidedAt: string | null;
+};
+
+export type TaskRun = {
+  id: string;
+  taskKey: string;
+  providerKey: string | null;
+  providerProfileKey: string | null;
+  promptVersion: string;
+  status: string;
+  validationStatus: string | null;
+  externalSend: boolean;
+  latencyMs: number | null;
+  provenance: JsonValue;
+  createdAt: string;
+};
+
 export type AutosaveSnapshot = {
   id: string;
   documentId: string;
@@ -158,6 +187,7 @@ export type DocumentDetail = {
     questions: Question[];
     evidenceSources: EvidenceSource[];
     highlights: Highlight[];
+    aiSuggestions: AiSuggestion[];
   };
 };
 
@@ -217,6 +247,19 @@ export type ExecuteWorkflowActionResponse = {
     to: string;
   };
   actions: WorkflowAction[];
+};
+
+export type SuggestComponentRevisionResponse = {
+  suggestion: AiSuggestion;
+  taskRun: TaskRun;
+  output: {
+    proposedText: string;
+    rationale: string;
+    confidence: number;
+    sourceComponentId: string;
+    warnings: string[];
+  };
+  readiness: ProviderReadiness;
 };
 
 const apiBase = import.meta.env.VITE_ARTIFACT_REVIEW_API_BASE ?? "";
@@ -402,4 +445,13 @@ export async function saveDocument(documentId: string): Promise<SaveDocumentResp
   return requestJson<SaveDocumentResponse>(`/api/documents/${encodeURIComponent(documentId)}/save`, {
     method: "POST"
   });
+}
+
+export async function suggestComponentRevision(componentId: string): Promise<SuggestComponentRevisionResponse> {
+  return requestJson<SuggestComponentRevisionResponse>(
+    `/api/components/${encodeURIComponent(componentId)}/ai-suggestions`,
+    {
+      method: "POST"
+    }
+  );
 }

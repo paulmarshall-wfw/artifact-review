@@ -6,9 +6,12 @@ import type { AppConfig } from "../config/env.js";
 import { checkDatabase } from "../db/pool.js";
 import { combineReadiness } from "../domain/readiness.js";
 import { parseHtmlToComponents, parseMarkdownToComponents, parsePlainTextToComponents } from "../domain/parser.js";
-import { buildProviderReadiness } from "../providers/readiness.js";
+import { buildProviderReadiness, resolveSelectedProfileSelection, selectProviderForTask } from "../providers/readiness.js";
+import { fetchRegistryLookup } from "../providers/registry.js";
+import { suggestComponentRevisionOutputSchema } from "../providers/tasks.js";
 import type { DocumentSummary, ReviewComponent } from "../repositories/documents.js";
 import { createRepositories, type Repositories } from "../repositories/index.js";
+import type { ProviderTaskAsset } from "../repositories/providerTasks.js";
 import type { ReviewComponentForMutation } from "../repositories/review.js";
 import type { JsonValue } from "../repositories/types.js";
 import {
@@ -54,6 +57,8 @@ const highlightRequestSchema = z.object({
   enabled: z.boolean()
 });
 
+const suggestComponentRevisionTaskKey = "suggest-component-revision";
+
 function toSafeJson(value: unknown): JsonValue {
   return JSON.parse(JSON.stringify(value)) as JsonValue;
 }
@@ -85,6 +90,37 @@ async function createMutationAutosave(
 
 async function getComponentForMutation(repositories: Repositories, componentId: string) {
   return repositories.review.getComponent(componentId);
+}
+
+async function buildProviderContext(
+  config: AppConfig,
+  repositories: Repositories | null,
+  taskKey: string = suggestComponentRevisionTaskKey
+) {
+  const selectedProviderProfileKey = await repositories?.appSettings.getSelectedProviderProfileKey();
+  const settings = { selectedProviderProfileKey };
+  const selection = resolveSelectedProfileSelection(config, settings);
+  const taskAsset = repositories ? await repositories.providerTasks.getTaskAsset(taskKey) : null;
+  const registry =
+    config.INVOKE_PROVIDERS_REGISTRY_URL && selection.profileKey
+      ? await fetchRegistryLookup(config, selection.profileKey)
+      : undefined;
+  const readiness = buildProviderReadiness(config, settings, {
+    taskKey,
+    taskAsset,
+    registry,
+    secretEnv: process.env
+  });
+  const provider = selectProviderForTask(registry?.providers ?? [], taskAsset);
+
+  return {
+    readiness,
+    selectedProfileKey: selection.profileKey,
+    selectedProfileSource: selection.source,
+    taskAsset,
+    registry,
+    provider
+  };
 }
 
 async function buildReviewStateSnapshot(
@@ -124,6 +160,38 @@ async function buildReviewStateSnapshot(
     evidenceSources,
     highlights
   });
+}
+
+function buildDemoSuggestComponentRevisionOutput(
+  component: ReviewComponentForMutation,
+  taskAsset: ProviderTaskAsset | null
+) {
+  const normalizedText = component.currentText.replace(/\s+/g, " ").trim();
+  const proposedText = normalizeSuggestionText(normalizedText);
+  const changed = proposedText !== component.currentText;
+
+  return {
+    proposedText,
+    rationale: changed
+      ? "Proposed a clearer review revision while preserving the component meaning."
+      : "No substantive rewrite was needed; the proposal preserves the current component text.",
+    confidence: changed ? 0.78 : 0.62,
+    sourceComponentId: component.id,
+    warnings: taskAsset?.schema ? [] : ["Structured output schema was unavailable during generation."]
+  };
+}
+
+function normalizeSuggestionText(value: string): string {
+  const simplified = value
+    .replace(/\bin order to\b/gi, "to")
+    .replace(/\butilize\b/gi, "use")
+    .replace(/\bUtilize\b/g, "Use");
+
+  if (!simplified) {
+    return value;
+  }
+
+  return /[.!?]$/.test(simplified) ? simplified : `${simplified}.`;
 }
 
 function parseFileContent(format: "txt" | "md" | "html" | "htm", content: string) {
@@ -240,15 +308,13 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
   app.get("/api/setup-readiness", async (_request, response) => {
     const database = await checkDatabase(pool);
     const activeWorkflow = await repositories?.workflows.getActiveDocumentWorkflow();
-    const provider = buildProviderReadiness(config, {
-      selectedProviderProfileKey: await repositories?.appSettings.getSelectedProviderProfileKey()
-    });
+    const provider = await buildProviderContext(config, repositories);
     const workflow = buildWorkflowReadiness(Boolean(activeWorkflow));
 
     response.json(
       combineReadiness([
         { key: "database", label: "Database", ready: database.ready, reason: database.reason },
-        ...provider.checks,
+        ...provider.readiness.checks,
         ...workflow.checks
       ])
     );
@@ -301,20 +367,15 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
   });
 
   app.get("/api/provider-readiness", async (_request, response) => {
-    response.json(
-      buildProviderReadiness(config, {
-        selectedProviderProfileKey: await repositories?.appSettings.getSelectedProviderProfileKey()
-      })
-    );
+    const provider = await buildProviderContext(config, repositories);
+    response.json(provider.readiness);
   });
 
   app.get("/api/provider-readiness/tasks/:taskKey", async (request, response) => {
-    const provider = buildProviderReadiness(config, {
-      selectedProviderProfileKey: await repositories?.appSettings.getSelectedProviderProfileKey()
-    });
+    const provider = await buildProviderContext(config, repositories, request.params.taskKey);
     response.json({
       taskKey: request.params.taskKey,
-      ...provider
+      ...provider.readiness
     });
   });
 
@@ -353,7 +414,8 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
         annotations: await repositories.review.listAnnotations(document.id),
         questions: await repositories.review.listQuestions(document.id),
         evidenceSources: await repositories.review.listEvidenceSources(document.id),
-        highlights: await repositories.review.listHighlights(document.id)
+        highlights: await repositories.review.listHighlights(document.id),
+        aiSuggestions: await repositories.aiSuggestions.listSuggestionsForDocument(document.id)
       }
     });
   });
@@ -881,9 +943,16 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
   });
 
   app.post("/api/components/:componentId/ai-suggestions", async (request, response) => {
-    const readiness = buildProviderReadiness(config, {
-      selectedProviderProfileKey: await repositories?.appSettings.getSelectedProviderProfileKey()
-    });
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before requesting provider-backed suggestions."
+      });
+      return;
+    }
+
+    const providerContext = await buildProviderContext(config, repositories, suggestComponentRevisionTaskKey);
+    const readiness = providerContext.readiness;
     if (!readiness.ready) {
       response.status(409).json({
         error: "provider_not_ready",
@@ -893,10 +962,75 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       return;
     }
 
-    response.status(501).json({
-      error: "provider_runtime_not_wired",
-      componentId: request.params.componentId,
-      message: "Provider runtime composition is scaffolded; registry-backed invocation is an implementation task."
+    const component = await repositories.review.getComponent(request.params.componentId);
+    if (!component) {
+      response.status(404).json({
+        error: "component_not_found",
+        componentId: request.params.componentId
+      });
+      return;
+    }
+
+    const startedAt = Date.now();
+    const providerOutput = buildDemoSuggestComponentRevisionOutput(component, providerContext.taskAsset);
+    const parsedOutput = suggestComponentRevisionOutputSchema.safeParse(providerOutput);
+    if (!parsedOutput.success || parsedOutput.data.sourceComponentId !== component.id) {
+      const taskRun = await repositories.taskRuns.createTaskRun({
+        taskKey: suggestComponentRevisionTaskKey,
+        providerKey: providerContext.provider?.providerKey ?? "artifact-review-demo",
+        providerProfileKey: providerContext.selectedProfileKey ?? "demo",
+        promptVersion: providerContext.taskAsset?.promptVersion ?? "0.1.0",
+        status: "failed",
+        validationStatus: "invalid",
+        externalSend: providerContext.provider?.externalSend ?? false,
+        latencyMs: Date.now() - startedAt,
+        provenance: toSafeJson({
+          providerRuntime: "deterministic-demo",
+          selectedProfileSource: providerContext.selectedProfileSource,
+          failure: parsedOutput.success ? "source_component_mismatch" : "output_validation_failed"
+        })
+      });
+      response.status(502).json({
+        error: "provider_output_invalid",
+        componentId: component.id,
+        taskRun
+      });
+      return;
+    }
+
+    const output = parsedOutput.data;
+    const taskRun = await repositories.taskRuns.createTaskRun({
+      taskKey: suggestComponentRevisionTaskKey,
+      providerKey: providerContext.provider?.providerKey ?? "artifact-review-demo",
+      providerProfileKey: providerContext.selectedProfileKey ?? "demo",
+      promptVersion: providerContext.taskAsset?.promptVersion ?? "0.1.0",
+      status: "succeeded",
+      validationStatus: "valid",
+      externalSend: providerContext.provider?.externalSend ?? false,
+      latencyMs: Date.now() - startedAt,
+      provenance: toSafeJson({
+        providerRuntime: "deterministic-demo",
+        selectedProfileSource: providerContext.selectedProfileSource,
+        hookKey: providerContext.taskAsset?.hookKey,
+        renderSlot: providerContext.taskAsset?.renderSlot,
+        schemaVersion: providerContext.taskAsset?.schemaVersion,
+        registryProfileFound: Boolean(providerContext.registry?.profile)
+      })
+    });
+    const suggestion = await repositories.aiSuggestions.createSuggestion({
+      componentId: component.id,
+      taskRunId: taskRun.id,
+      proposedText: output.proposedText,
+      rationale: output.rationale,
+      confidence: output.confidence,
+      warnings: output.warnings
+    });
+
+    response.status(201).json({
+      suggestion,
+      taskRun,
+      output,
+      readiness
     });
   });
 

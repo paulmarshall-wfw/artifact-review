@@ -99,11 +99,17 @@ Remaining:
 
 Purpose: add AI assistance as proposal-only workflow.
 
-- Wire registry-backed provider readiness.
+Completed:
+
+- Wire registry-backed provider readiness around `GET /profiles/:profileKey` and `GET /profiles/:profileKey/providers`.
 - Load selected provider profile from app settings first, then first-run env fallback.
-- Implement task definitions, prompt versions, structured output schemas, and hooks.
-- Implement `suggest-component-revision`.
-- Store provider output as proposed `ai_suggestions`.
+- Seed app-owned task definitions, prompt versions, structured output schemas, render slots, and hooks through numbered migration `003_provider_task_assets.sql`.
+- Implement `suggest-component-revision` in explicit deterministic demo mode.
+- Store provider output as proposed `ai_suggestions` and task-run provenance without mutating component text.
+
+Remaining:
+
+- Wire real provider runtime adapters after the provider runtime dependency is explicitly approved and installed.
 - Implement accept/reject as separate audited user actions.
 
 ## Build Slice 6: Export

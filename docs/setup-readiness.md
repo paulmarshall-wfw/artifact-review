@@ -29,12 +29,15 @@ Copy `.env.example` to `.env` and fill values appropriate for local development.
 
 ## Expected First-Run Blockers
 
-Until implementation continues, these blockers are expected:
+Until implementation continues, these blockers can be expected depending on local configuration:
 
 - no active document workflow is imported or activated
-- migration runner is not wired
-- document repositories are not wired
-- real registry-backed provider client is not wired
+- database is not configured through `DATABASE_URL`
+- provider registry URL is missing or unreachable
+- saved selected provider profile is missing from the registry
+- no enabled registry provider supplies the required task capability
+- required provider secret reference is unavailable locally
+- provider runtime adapters are not installed unless explicit deterministic demo mode is enabled
 - AI suggestion accept/reject flow is not wired
 - export is not wired
 

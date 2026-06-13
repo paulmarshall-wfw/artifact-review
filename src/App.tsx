@@ -17,6 +17,7 @@ import {
   listDocuments,
   saveDocument,
   setHighlight,
+  suggestComponentRevision,
   updateComponentText,
   validateWorkflowDefinition,
   type AutosaveSnapshot,
@@ -47,6 +48,7 @@ type PendingKey =
   | "question"
   | "evidence"
   | "highlight"
+  | "ai-suggest"
   | "save"
   | "workflow-action";
 
@@ -143,6 +145,13 @@ export function App() {
       selectedComponent
         ? documentDetail?.review.highlights.find((highlight) => highlight.componentId === selectedComponent.id) ?? null
         : null,
+    [documentDetail, selectedComponent]
+  );
+  const suggestionsForComponent = useMemo(
+    () =>
+      selectedComponent
+        ? documentDetail?.review.aiSuggestions.filter((suggestion) => suggestion.componentId === selectedComponent.id) ?? []
+        : [],
     [documentDetail, selectedComponent]
   );
   const filteredComponents = useMemo(() => {
@@ -421,6 +430,18 @@ export function App() {
     await refreshDetail(selectedDocumentId);
     await refreshGlobal();
     setNotice(`Saved version ${response.version.versionNumber}.`);
+  }
+
+  async function handleSuggestComponentRevision() {
+    if (!selectedComponent || !selectedDocumentId) {
+      return;
+    }
+
+    setError(null);
+    const response = await runPending("ai-suggest", () => suggestComponentRevision(selectedComponent.id));
+    setProviderReadiness(response.readiness);
+    await refreshDetail(selectedDocumentId);
+    setNotice(`Stored proposed suggestion ${response.suggestion.id}.`);
   }
 
   async function handleWorkflowAction(actionId: string) {
@@ -799,6 +820,10 @@ export function App() {
                                 documentDetail.review.questions.filter((item) => item.componentId === component.id).length +
                                 documentDetail.review.evidenceSources.filter((item) => item.componentId === component.id).length
                               : 0;
+                            const suggestionCount =
+                              documentDetail?.review.aiSuggestions.filter(
+                                (item) => item.componentId === component.id && item.status === "proposed"
+                              ).length ?? 0;
                             return (
                               <article
                                 className={isSelected ? "review-component selected" : "review-component"}
@@ -810,6 +835,7 @@ export function App() {
                                     {component.kind} · {component.sectionId}
                                     {highlight?.enabled ? " · highlighted" : ""}
                                     {reviewCount > 0 ? ` · ${reviewCount} review notes` : ""}
+                                    {suggestionCount > 0 ? ` · ${suggestionCount} AI proposals` : ""}
                                   </span>
                                 </button>
                                 <div className="component-inline-actions">
@@ -873,9 +899,49 @@ export function App() {
                   <button disabled={isPending("edit")} onClick={() => reportActionError(handleComponentEdit)}>
                     {isPending("edit") ? "Autosaving" : "Autosave Text"}
                   </button>
-                  <button disabled={!providerReadiness?.ready} title="Requires provider readiness">
-                    AI Suggest
+                  <button
+                    disabled={!providerReadiness?.ready || isPending("ai-suggest")}
+                    title={providerReadiness?.ready ? "Create a proposed AI suggestion" : providerBlocker(providerReadiness)}
+                    onClick={() => reportActionError(handleSuggestComponentRevision)}
+                  >
+                    {isPending("ai-suggest") ? "Suggesting" : "AI Suggest"}
                   </button>
+                </div>
+
+                <div className="suggestion-panel">
+                  <div className="suggestion-heading">
+                    <h3>AI Suggestions</h3>
+                    <StatusPill
+                      item={{
+                        key: "provider-suggestions",
+                        label: "Provider",
+                        ready: Boolean(providerReadiness?.ready),
+                        reason: providerBlocker(providerReadiness)
+                      }}
+                    />
+                  </div>
+                  {suggestionsForComponent.length === 0 ? (
+                    <p className="muted compact">No proposed suggestions for this component.</p>
+                  ) : (
+                    <div className="suggestion-list">
+                      {suggestionsForComponent.map((suggestion) => (
+                        <article className="suggestion-card" key={suggestion.id}>
+                          <div className="suggestion-heading">
+                            <strong>{suggestion.status}</strong>
+                            <span>{Math.round(suggestion.confidence * 100)}%</span>
+                          </div>
+                          <p>{suggestion.proposedText}</p>
+                          <small>{suggestion.rationale}</small>
+                          {Array.isArray(suggestion.warnings) && suggestion.warnings.length > 0 ? (
+                            <small>Warnings: {suggestion.warnings.join(", ")}</small>
+                          ) : null}
+                          <small>
+                            Task run {suggestion.taskRunId ?? "not recorded"} · {formatDateTime(suggestion.createdAt)}
+                          </small>
+                        </article>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="review-note-grid">
@@ -992,6 +1058,14 @@ function RecordList({ emptyLabel, records }: { emptyLabel: string; records: stri
       ))}
     </ul>
   );
+}
+
+function providerBlocker(readiness: ProviderReadiness | null) {
+  if (!readiness || readiness.ready) {
+    return undefined;
+  }
+
+  return readiness.checks.find((check) => !check.ready)?.reason ?? "Provider readiness is blocked.";
 }
 
 function formatDateTime(value: string) {

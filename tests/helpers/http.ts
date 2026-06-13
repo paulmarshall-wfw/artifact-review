@@ -37,11 +37,12 @@ export function createQueuedDatabase(queuedRows: object[][]): Queryable & { quer
   };
 }
 
-export function createTestServer(db: Queryable | null) {
+export function createTestServer(db: Queryable | null, env: NodeJS.ProcessEnv = {}) {
   return createServer(
     loadConfig({
       ARTIFACT_REVIEW_SERVICE_HOST: "127.0.0.1",
-      ARTIFACT_REVIEW_SERVICE_PORT: "4793"
+      ARTIFACT_REVIEW_SERVICE_PORT: "4793",
+      ...env
     }),
     db as pg.Pool | null
   );

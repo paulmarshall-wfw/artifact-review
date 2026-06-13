@@ -6,6 +6,7 @@ Artifact Review stores app-owned domain state in Postgres through `DATABASE_URL`
 
 - `service/migrations/001_initial_schema.sql`
 - `service/migrations/002_review_and_provider_records.sql`
+- `service/migrations/003_provider_task_assets.sql`
 
 `service/src/db/migrations.ts` now loads numbered SQL files in lexical order, records applied checksums in `schema_migrations`, and applies unapplied migrations inside database transactions during service startup when `DATABASE_URL` is configured.
 
@@ -47,6 +48,14 @@ Artifact Review stores app-owned domain state in Postgres through `DATABASE_URL`
 - `INVOKE_PROVIDERS_PROFILE` is first-run bootstrap only and must not override a saved selected profile.
 - Deterministic provider behavior is allowed only through explicit test/demo mode.
 
+`003_provider_task_assets.sql` seeds the app-owned MVP task assets:
+
+- `suggest-component-revision` for component inline AI suggestions.
+- `summarize-section-findings` for section-level summaries.
+- `draft-review-note` for component drawer note drafts.
+
+Each seeded task has a prompt version, structured output schema, render slot, and processing hook record. The `suggest-component-revision` hook currently stores proposed `ai_suggestions` only; accepting or rejecting suggestions remains a separate audited action.
+
 ## Workflow Boundary
 
 Artifact Review owns document workflow state in its own database. Active document workflow definitions are currently stored under the app setting key `activeDocumentWorkflowDefinition`; document rows store their current workflow state in `documents.current_workflow_item_ref`.
@@ -83,5 +92,5 @@ The first data implementation slice now includes:
 Still remaining after the initial persistence foundation and ingest slices:
 
 - workflow storage adapter for document lifecycle state
-- provider-backed suggestions
+- real provider adapter execution beyond deterministic demo suggestions
 - same-format export
