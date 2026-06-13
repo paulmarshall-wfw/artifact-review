@@ -108,10 +108,14 @@ Completed:
 - Store provider output as proposed `ai_suggestions` and task-run provenance without mutating component text.
 - Implement accept/reject as separate audited user actions.
 - Wire React suggestion cards to accept/reject proposed suggestions while preserving accepted/rejected history.
+- Install the full local numbered `@invoke-providers/*@0.1.0` package family.
+- Route registry lookup through `@invoke-providers/client`.
+- Route `suggest-component-revision` through `invoke-providers-for-tasks` core invocation, registered adapters, structured output validation, and app-owned hook/task-run persistence.
+- Keep deterministic demo mode on the same invocation path with a local deterministic adapter.
 
 Remaining:
 
-- Wire real provider runtime adapters after the provider runtime dependency is explicitly approved and installed.
+- Validate a live registry/provider profile with a local secret reference against real provider adapter execution.
 
 ## Build Slice 6: Export
 

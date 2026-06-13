@@ -17,7 +17,11 @@ import {
   selectProviderForTask
 } from "../providers/readiness.js";
 import { fetchRegistryLookup } from "../providers/registry.js";
-import { suggestComponentRevisionOutputSchema } from "../providers/tasks.js";
+import {
+  getRegisteredProviderAdapterKeys,
+  invokeSuggestComponentRevision,
+  suggestComponentRevisionTaskKey
+} from "../providers/runtime.js";
 import type { DocumentSummary, ReviewComponent } from "../repositories/documents.js";
 import { createRepositories, type Repositories } from "../repositories/index.js";
 import type { ProviderTaskAsset } from "../repositories/providerTasks.js";
@@ -69,8 +73,6 @@ const evidenceRequestSchema = z.object({
 const highlightRequestSchema = z.object({
   enabled: z.boolean()
 });
-
-const suggestComponentRevisionTaskKey = "suggest-component-revision";
 
 const exportDocumentRequestSchema = z.object({
   destinationPath: z.string().min(1).optional(),
@@ -141,7 +143,8 @@ async function buildProviderContext(
     taskKey,
     taskAsset,
     registry,
-    secretEnv: process.env
+    secretEnv: process.env,
+    registeredAdapterKeys: getRegisteredProviderAdapterKeys()
   });
   const provider = selectProviderForTask(registry?.providers ?? [], taskAsset);
 
@@ -151,6 +154,7 @@ async function buildProviderContext(
     selectedProfileSource: selection.source,
     registryUrl: registrySelection.registryUrl,
     registryUrlSource: registrySelection.source,
+    demoMode: demoModeSelection.enabled,
     taskAsset,
     registry,
     provider
@@ -246,38 +250,6 @@ async function writeExportFiles(
     exportPath: destinationPath,
     reviewBundlePath
   };
-}
-
-function buildDemoSuggestComponentRevisionOutput(
-  component: ReviewComponentForMutation,
-  taskAsset: ProviderTaskAsset | null
-) {
-  const normalizedText = component.currentText.replace(/\s+/g, " ").trim();
-  const proposedText = normalizeSuggestionText(normalizedText);
-  const changed = proposedText !== component.currentText;
-
-  return {
-    proposedText,
-    rationale: changed
-      ? "Proposed a clearer review revision while preserving the component meaning."
-      : "No substantive rewrite was needed; the proposal preserves the current component text.",
-    confidence: changed ? 0.78 : 0.62,
-    sourceComponentId: component.id,
-    warnings: taskAsset?.schema ? [] : ["Structured output schema was unavailable during generation."]
-  };
-}
-
-function normalizeSuggestionText(value: string): string {
-  const simplified = value
-    .replace(/\bin order to\b/gi, "to")
-    .replace(/\butilize\b/gi, "use")
-    .replace(/\bUtilize\b/g, "Use");
-
-  if (!simplified) {
-    return value;
-  }
-
-  return /[.!?]$/.test(simplified) ? simplified : `${simplified}.`;
 }
 
 function parseFileContent(format: "txt" | "md" | "html" | "htm", content: string) {
@@ -1201,65 +1173,37 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       return;
     }
 
-    const startedAt = Date.now();
-    const providerOutput = buildDemoSuggestComponentRevisionOutput(component, providerContext.taskAsset);
-    const parsedOutput = suggestComponentRevisionOutputSchema.safeParse(providerOutput);
-    if (!parsedOutput.success || parsedOutput.data.sourceComponentId !== component.id) {
-      const taskRun = await repositories.taskRuns.createTaskRun({
-        taskKey: suggestComponentRevisionTaskKey,
-        providerKey: providerContext.provider?.providerKey ?? "artifact-review-demo",
-        providerProfileKey: providerContext.selectedProfileKey ?? "demo",
-        promptVersion: providerContext.taskAsset?.promptVersion ?? "0.1.0",
-        status: "failed",
-        validationStatus: "invalid",
-        externalSend: providerContext.provider?.externalSend ?? false,
-        latencyMs: Date.now() - startedAt,
-        provenance: toSafeJson({
-          providerRuntime: "deterministic-demo",
-          selectedProfileSource: providerContext.selectedProfileSource,
-          failure: parsedOutput.success ? "source_component_mismatch" : "output_validation_failed"
-        })
-      });
+    const invocation = await invokeSuggestComponentRevision(repositories, component, {
+      taskAsset: providerContext.taskAsset,
+      provider: providerContext.provider,
+      selectedProfileKey: providerContext.selectedProfileKey,
+      selectedProfileSource: providerContext.selectedProfileSource,
+      registryProfileFound: Boolean(providerContext.registry?.profile),
+      demoMode: providerContext.demoMode
+    });
+
+    if (!invocation.ok) {
       response.status(502).json({
-        error: "provider_output_invalid",
+        error: invocation.error,
         componentId: component.id,
-        taskRun
+        taskRun: invocation.taskRun
       });
       return;
     }
 
-    const output = parsedOutput.data;
-    const taskRun = await repositories.taskRuns.createTaskRun({
-      taskKey: suggestComponentRevisionTaskKey,
-      providerKey: providerContext.provider?.providerKey ?? "artifact-review-demo",
-      providerProfileKey: providerContext.selectedProfileKey ?? "demo",
-      promptVersion: providerContext.taskAsset?.promptVersion ?? "0.1.0",
-      status: "succeeded",
-      validationStatus: "valid",
-      externalSend: providerContext.provider?.externalSend ?? false,
-      latencyMs: Date.now() - startedAt,
-      provenance: toSafeJson({
-        providerRuntime: "deterministic-demo",
-        selectedProfileSource: providerContext.selectedProfileSource,
-        hookKey: providerContext.taskAsset?.hookKey,
-        renderSlot: providerContext.taskAsset?.renderSlot,
-        schemaVersion: providerContext.taskAsset?.schemaVersion,
-        registryProfileFound: Boolean(providerContext.registry?.profile)
-      })
-    });
     const suggestion = await repositories.aiSuggestions.createSuggestion({
       componentId: component.id,
-      taskRunId: taskRun.id,
-      proposedText: output.proposedText,
-      rationale: output.rationale,
-      confidence: output.confidence,
-      warnings: output.warnings
+      taskRunId: invocation.taskRun.id,
+      proposedText: invocation.output.proposedText,
+      rationale: invocation.output.rationale,
+      confidence: invocation.output.confidence,
+      warnings: invocation.output.warnings
     });
 
     response.status(201).json({
       suggestion,
-      taskRun,
-      output,
+      taskRun: invocation.taskRun,
+      output: invocation.output,
       readiness
     });
   });

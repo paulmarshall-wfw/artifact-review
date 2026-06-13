@@ -75,4 +75,40 @@ describe("provider readiness", () => {
     expect(readiness.checks.find((check) => check.key === "adapter-availability")?.ready).toBe(true);
     expect(readiness.checks.find((check) => check.key === "task-definitions")?.ready).toBe(true);
   });
+
+  it("marks provider adapters ready when a registry provider uses a registered runtime adapter", () => {
+    const config = loadConfig({
+      INVOKE_PROVIDERS_REGISTRY_URL: "http://127.0.0.1:5181",
+      INVOKE_PROVIDERS_PROFILE: "registry-profile"
+    });
+    const readiness = buildProviderReadiness(config, {}, {
+      taskKey: "suggest-component-revision",
+      taskAsset: suggestTaskAsset,
+      registeredAdapterKeys: ["openai-compatible-cloud"],
+      registry: {
+        configured: true,
+        profileKey: "registry-profile",
+        reachable: true,
+        missingProfile: false,
+        profile: { profileKey: "registry-profile" },
+        error: null,
+        providers: [
+          {
+            providerKind: "llm",
+            providerKey: "openai-compatible",
+            adapterKey: "openai-compatible-cloud",
+            displayName: "OpenAI compatible",
+            enabled: true,
+            externalSend: true,
+            requiredSecretRef: "OPENAI_API_KEY",
+            capabilities: [{ key: "llm.generateJson", displayName: "Generate JSON" }]
+          }
+        ]
+      },
+      secretEnv: { OPENAI_API_KEY: "test-key" }
+    });
+
+    expect(readiness.checks.find((check) => check.key === "adapter-availability")?.ready).toBe(true);
+    expect(readiness.checks.find((check) => check.key === "provider-capability")?.ready).toBe(true);
+  });
 });

@@ -18,6 +18,11 @@
     "doctor": "node scripts/doctor.mjs"
   },
   "dependencies": {
+    "@invoke-providers/adapters": "file:../invoke-providers-for-tasks/packages/adapters",
+    "@invoke-providers/client": "file:../invoke-providers-for-tasks/packages/client",
+    "@invoke-providers/core": "file:../invoke-providers-for-tasks/packages/core",
+    "@invoke-providers/react": "file:../invoke-providers-for-tasks/packages/react",
+    "@invoke-providers/registry": "file:../invoke-providers-for-tasks/packages/registry",
     "@tauri-apps/api": "2.5.0",
     "cors": "2.8.5",
     "express": "5.1.0",

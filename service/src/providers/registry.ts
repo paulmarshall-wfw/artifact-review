@@ -1,19 +1,13 @@
+import { RemoteRegistryClient, RegistryClientError } from "@invoke-providers/client";
+import type { ProviderConfig } from "@invoke-providers/core";
+
 export type RegistryProfile = {
   profileKey: string;
   displayName?: string;
   description?: string;
 };
 
-export type RegistryProviderConfig = {
-  providerKey: string;
-  displayName?: string;
-  enabled: boolean;
-  adapterKey?: string;
-  model?: string;
-  externalSend: boolean;
-  requiredSecretRef?: string;
-  capabilities: Array<{ key: string; displayName?: string }>;
-};
+export type RegistryProviderConfig = ProviderConfig;
 
 export type RegistryLookupResult = {
   configured: boolean;
@@ -46,14 +40,8 @@ export async function fetchRegistryLookup(
   }
 
   try {
-    const profile = await requestRegistryJson<RegistryProfile>(
-      fetchImpl,
-      `${registryUrl}/profiles/${encodeURIComponent(profileKey)}`
-    );
-    const providers = await requestRegistryJson<RegistryProviderConfig[]>(
-      fetchImpl,
-      `${registryUrl}/profiles/${encodeURIComponent(profileKey)}/providers`
-    );
+    const client = new RemoteRegistryClient({ baseUrl: registryUrl, profileKey, fetchImpl });
+    const [profile, providers] = await Promise.all([client.getProfile(profileKey), client.listProviders()]);
     return {
       configured: true,
       profileKey,
@@ -68,69 +56,10 @@ export async function fetchRegistryLookup(
       configured: true,
       profileKey,
       reachable: false,
-      missingProfile: error instanceof RegistryLookupError && error.errorClass === "missing_profile",
+      missingProfile: error instanceof RegistryClientError && error.errorClass === "missing_profile",
       profile: null,
       providers: [],
       error: error instanceof Error ? error.message : String(error)
     };
   }
-}
-
-class RegistryLookupError extends Error {
-  constructor(readonly errorClass: string, message: string) {
-    super(message);
-  }
-}
-
-async function requestRegistryJson<T>(fetchImpl: typeof fetch, url: string): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetchImpl(url, {
-      method: "GET",
-      signal: AbortSignal.timeout(750)
-    });
-  } catch (error) {
-    throw new RegistryLookupError(
-      "registry_unavailable",
-      error instanceof Error ? error.message : "Provider registry is unavailable."
-    );
-  }
-
-  const payload = await readJson(response);
-  if (!response.ok) {
-    throw new RegistryLookupError(
-      readErrorClass(payload),
-      readErrorMessage(payload, `Registry request failed with HTTP ${response.status}.`)
-    );
-  }
-
-  return payload as T;
-}
-
-async function readJson(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (!text.trim()) {
-    return null;
-  }
-  return JSON.parse(text) as unknown;
-}
-
-function readErrorClass(payload: unknown): string {
-  if (payload && typeof payload === "object" && "errorClass" in payload) {
-    const errorClass = (payload as { errorClass?: unknown }).errorClass;
-    if (typeof errorClass === "string") {
-      return errorClass;
-    }
-  }
-  return "registry_unavailable";
-}
-
-function readErrorMessage(payload: unknown, fallback: string): string {
-  if (payload && typeof payload === "object" && "message" in payload) {
-    const message = (payload as { message?: unknown }).message;
-    if (typeof message === "string") {
-      return message;
-    }
-  }
-  return fallback;
 }

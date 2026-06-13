@@ -30,6 +30,7 @@ export type ProviderReadinessContext = {
   taskAsset?: ProviderTaskAsset | null;
   registry?: RegistryLookupResult;
   secretEnv?: NodeJS.ProcessEnv;
+  registeredAdapterKeys?: string[];
 };
 
 export function resolveSelectedProfile(config: AppConfig, settings: ProviderSettings): string | undefined {
@@ -113,6 +114,9 @@ export function buildProviderReadiness(
   const secretAvailable = requiredSecretRef ? Boolean((context.secretEnv ?? process.env)[requiredSecretRef]) : true;
   const registryConfigured = Boolean(registrySelection.registryUrl);
   const registryChecksBypassed = demoMode && (!registryConfigured || !selectedProfile);
+  const adapterRegistered = Boolean(
+    selectedProvider?.adapterKey && (context.registeredAdapterKeys ?? []).includes(selectedProvider.adapterKey)
+  );
 
   const checks: ReadinessCheck[] = [
     {
@@ -198,10 +202,14 @@ export function buildProviderReadiness(
     {
       key: "adapter-availability",
       label: "Provider adapter",
-      ready: demoMode,
+      ready: demoMode || adapterRegistered,
       reason: demoMode
         ? "Explicit deterministic demo mode is enabled."
-        : "Provider runtime adapters are not installed in this project yet."
+        : adapterRegistered
+          ? `Adapter ${selectedProvider?.adapterKey ?? ""} is registered.`
+          : selectedProvider?.adapterKey
+            ? `Adapter ${selectedProvider.adapterKey} is not registered in this project.`
+            : "No provider adapter has been selected from the registry."
     },
     {
       key: "provider-fallback-policy",

@@ -18,7 +18,7 @@ The MVP is grounded by:
 - React 19 and Vite 6 web workspace
 - Node/TypeScript local service
 - Postgres via `DATABASE_URL`
-- `invoke-providers-for-tasks` target-app integration boundary
+- `invoke-providers-for-tasks@0.1.0` target-app runtime packages through local `@invoke-providers/*` dependencies
 - `state-workflow-runtime` backend-owned document workflow boundary
 
 ## Local Configuration

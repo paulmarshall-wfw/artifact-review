@@ -73,7 +73,7 @@ Review mutation endpoints now write app-owned review records through the service
 - `POST /api/documents/:documentId/save` creates a new `document_versions` row, preserves the first imported `source_snapshot`, and stores the reviewed component/review-record state as a JSON `current_snapshot`.
 - `POST /api/documents/:documentId/export` reconstructs same-format reviewed output from the imported `source_snapshot` plus current review components. `txt` and `md` exports append review notes in matching text formats; `html`, `htm`, and URL snapshot exports embed review notes and JSON metadata in the HTML. When enabled, the optional JSON review bundle carries document, source/latest version, component, and review-record data beside the reviewed artifact.
 
-The `state-workflow-runtime` storage adapter has not been installed or wired yet. Until then, the service validates the same explicit workflow shape and derives allowed user actions from the active app-owned definition.
+The `state-workflow-runtime` storage adapter is wired through the service and persists runtime state in `app_settings` under `stateWorkflowRuntime.state`. The service validates importable workflow definitions through the runtime, stores active workflow selection there, initializes document item state during ingest, and derives allowed actions through runtime APIs.
 
 The repo-stored workflow definition is an importable fixture:
 
@@ -94,6 +94,5 @@ The first data implementation slice now includes:
 
 Still remaining after the initial persistence foundation and ingest slices:
 
-- workflow storage adapter for document lifecycle state
-- real provider adapter execution beyond deterministic demo suggestions
-- same-format export
+- database-backed Chrome validation with populated workflow/review/provider data
+- Windows smoke validation before distribution discussion

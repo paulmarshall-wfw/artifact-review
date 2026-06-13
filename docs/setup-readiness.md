@@ -1,6 +1,6 @@
 # Setup And Readiness
 
-Artifact Review should be explicit about setup blockers before users try to ingest or review a document. The app currently exposes readiness endpoints, but most domain behavior remains scaffolded.
+Artifact Review should be explicit about setup blockers before users try to ingest or review a document. The app exposes readiness endpoints for the database, document workflow, provider registry, provider runtime adapters, local secret references, and task assets.
 
 ## Required Local Configuration
 
@@ -41,7 +41,7 @@ These settings are stored in `app_settings` and take precedence over first-run e
 
 ## Expected First-Run Blockers
 
-Until implementation continues, these blockers can be expected depending on local configuration:
+These blockers can be expected depending on local configuration:
 
 - no active document workflow is imported or activated
 - database is not configured through `DATABASE_URL`
@@ -49,7 +49,7 @@ Until implementation continues, these blockers can be expected depending on loca
 - saved selected provider profile is missing from the registry
 - no enabled registry provider supplies the required task capability
 - required provider secret reference is unavailable locally
-- provider runtime adapters are not installed unless explicit deterministic demo mode is enabled
+- selected registry provider uses an adapter that is not registered in Artifact Review
 
 These blockers should be shown as setup state, not as broken import or review behavior.
 
