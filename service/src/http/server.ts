@@ -1034,17 +1034,112 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
     });
   });
 
-  app.post("/api/ai-suggestions/:suggestionId/accept", (request, response) => {
-    response.status(501).json({
-      error: "suggestion_accept_not_wired",
-      suggestionId: request.params.suggestionId
+  app.post("/api/ai-suggestions/:suggestionId/accept", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before accepting AI suggestions."
+      });
+      return;
+    }
+
+    const suggestion = await repositories.aiSuggestions.getSuggestion(request.params.suggestionId);
+    if (!suggestion) {
+      response.status(404).json({
+        error: "suggestion_not_found",
+        suggestionId: request.params.suggestionId
+      });
+      return;
+    }
+
+    if (suggestion.status !== "proposed") {
+      response.status(409).json({
+        error: "suggestion_already_decided",
+        suggestionId: suggestion.id,
+        status: suggestion.status
+      });
+      return;
+    }
+
+    const result = await repositories.aiSuggestions.acceptSuggestion(suggestion.id);
+    if (!result) {
+      response.status(409).json({
+        error: "suggestion_accept_failed",
+        suggestionId: suggestion.id
+      });
+      return;
+    }
+
+    const autosave = await createMutationAutosave(repositories, "ai_suggestion_accepted", result.component, {
+      suggestionId: result.suggestion.id,
+      revisionId: result.revision.id,
+      previousText: result.revision.previousText,
+      revisedText: result.revision.revisedText,
+      editSource: result.revision.editSource
+    });
+
+    response.json({
+      suggestion: result.suggestion,
+      component: result.component,
+      revision: result.revision,
+      autosave
     });
   });
 
-  app.post("/api/ai-suggestions/:suggestionId/reject", (request, response) => {
-    response.status(501).json({
-      error: "suggestion_reject_not_wired",
-      suggestionId: request.params.suggestionId
+  app.post("/api/ai-suggestions/:suggestionId/reject", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before rejecting AI suggestions."
+      });
+      return;
+    }
+
+    const suggestion = await repositories.aiSuggestions.getSuggestion(request.params.suggestionId);
+    if (!suggestion) {
+      response.status(404).json({
+        error: "suggestion_not_found",
+        suggestionId: request.params.suggestionId
+      });
+      return;
+    }
+
+    if (suggestion.status !== "proposed") {
+      response.status(409).json({
+        error: "suggestion_already_decided",
+        suggestionId: suggestion.id,
+        status: suggestion.status
+      });
+      return;
+    }
+
+    const component = await repositories.review.getComponent(suggestion.componentId);
+    if (!component) {
+      response.status(404).json({
+        error: "component_not_found",
+        componentId: suggestion.componentId
+      });
+      return;
+    }
+
+    const rejectedSuggestion = await repositories.aiSuggestions.setSuggestionStatus(suggestion.id, "rejected");
+    if (!rejectedSuggestion) {
+      response.status(409).json({
+        error: "suggestion_reject_failed",
+        suggestionId: suggestion.id
+      });
+      return;
+    }
+
+    const autosave = await createMutationAutosave(repositories, "ai_suggestion_rejected", component, {
+      suggestionId: rejectedSuggestion.id,
+      proposedText: rejectedSuggestion.proposedText,
+      status: rejectedSuggestion.status
+    });
+
+    response.json({
+      suggestion: rejectedSuggestion,
+      autosave
     });
   });
 

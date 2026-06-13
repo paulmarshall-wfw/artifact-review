@@ -106,11 +106,12 @@ Completed:
 - Seed app-owned task definitions, prompt versions, structured output schemas, render slots, and hooks through numbered migration `003_provider_task_assets.sql`.
 - Implement `suggest-component-revision` in explicit deterministic demo mode.
 - Store provider output as proposed `ai_suggestions` and task-run provenance without mutating component text.
+- Implement accept/reject as separate audited user actions.
+- Wire React suggestion cards to accept/reject proposed suggestions while preserving accepted/rejected history.
 
 Remaining:
 
 - Wire real provider runtime adapters after the provider runtime dependency is explicitly approved and installed.
-- Implement accept/reject as separate audited user actions.
 
 ## Build Slice 6: Export
 

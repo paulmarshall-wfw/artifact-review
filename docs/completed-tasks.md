@@ -4,6 +4,11 @@ Append brief entries here when project work is completed. Keep this file concise
 
 ## 2026-06-13
 
+- Task: Build suggestion accept/reject slice.
+  Outcome: Implemented `/api/ai-suggestions/:suggestionId/accept` and `/api/ai-suggestions/:suggestionId/reject`; accepting proposed suggestions now applies the proposed text through an audited `component_revisions` row with the AI suggestion ID, while rejecting suggestions preserves suggestion history without mutating component text. React suggestion cards now expose Accept and Reject actions for proposed suggestions and keep decided suggestions visible.
+  Verification: `npm run lint` passed; `npm run verify` passed with 7 test files, 1 skipped Postgres suite, 33 tests passed, and 2 skipped; Vite production build passed.
+  Traceability: Git branch `main` at `b0876e6`; no commit yet; changed suggestion repository/API code, React API/UI code, focused HTTP tests, API/data/setup/sequence docs, completed-task ledger, and handoff.
+
 - Task: Refresh completed-task ledger and handoff after provider-suggestion slice.
   Outcome: Confirmed the provider-suggestion slice entry is present, refreshed `handoff.md` as the current dirty-tree checkpoint, and kept completed work history in `docs/completed-tasks.md` instead of duplicating it in the handoff.
   Verification: `git status --short --branch`, current `handoff.md`, and current `docs/completed-tasks.md` inspection completed; no build or test commands rerun because this was a documentation-only continuity refresh.

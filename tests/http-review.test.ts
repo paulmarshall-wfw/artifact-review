@@ -332,4 +332,130 @@ describe("review mutation HTTP endpoints", () => {
     expect(queryText).not.toContain("update review_components");
     expect(queryText).not.toContain("component_revisions");
   });
+
+  it("accepts a proposed AI suggestion by creating an audited component revision", async () => {
+    const proposedSuggestionRow = {
+      id: "suggestion-1",
+      component_id: "component-1",
+      task_run_id: "task-run-1",
+      proposed_text: "Accepted revision.",
+      rationale: "Clearer phrasing.",
+      confidence: "0.810",
+      warnings: [],
+      status: "proposed",
+      created_at: now,
+      decided_at: null
+    };
+    const db = createQueuedDatabase([
+      [proposedSuggestionRow],
+      [
+        {
+          component_id: "component-1",
+          component_document_id: "document-1",
+          component_kind: "paragraph_sentence",
+          component_section_id: "root",
+          component_source_range: { start: 0, end: 16 },
+          component_current_text: "Accepted revision.",
+          component_original_text_hash: "hash-original",
+          component_created_at: now,
+          component_updated_at: now,
+          revision_id: "revision-accepted",
+          revision_component_id: "component-1",
+          revision_previous_text: "Original sentence.",
+          revision_revised_text: "Accepted revision.",
+          revision_edit_source: "accepted_ai_suggestion",
+          revision_ai_suggestion_id: "suggestion-1",
+          revision_created_at: now,
+          suggestion_id: "suggestion-1",
+          suggestion_component_id: "component-1",
+          suggestion_task_run_id: "task-run-1",
+          suggestion_proposed_text: "Accepted revision.",
+          suggestion_rationale: "Clearer phrasing.",
+          suggestion_confidence: "0.810",
+          suggestion_warnings: [],
+          suggestion_status: "accepted",
+          suggestion_created_at: now,
+          suggestion_decided_at: now
+        }
+      ],
+      [{ id: "autosave-accept", document_id: "document-1", snapshot: { action: "ai_suggestion_accepted" }, created_at: now }]
+    ]);
+
+    const response = await requestApp(createTestServer(db), "POST", "/api/ai-suggestions/suggestion-1/accept");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      suggestion: {
+        id: "suggestion-1",
+        componentId: "component-1",
+        status: "accepted"
+      },
+      component: {
+        id: "component-1",
+        currentText: "Accepted revision."
+      },
+      revision: {
+        id: "revision-accepted",
+        editSource: "accepted_ai_suggestion",
+        aiSuggestionId: "suggestion-1",
+        previousText: "Original sentence.",
+        revisedText: "Accepted revision."
+      },
+      autosave: {
+        id: "autosave-accept",
+        documentId: "document-1"
+      }
+    });
+
+    const queryText = db.queries.map((query) => query.text).join("\n");
+    expect(queryText).toContain("update review_components");
+    expect(queryText).toContain("component_revisions");
+    expect(queryText).toContain("set status = 'accepted'");
+    expect(queryText).toContain("insert into autosave_snapshots");
+    expect(queryText).not.toContain("update document_versions");
+  });
+
+  it("rejects a proposed AI suggestion without mutating component text", async () => {
+    const proposedSuggestionRow = {
+      id: "suggestion-1",
+      component_id: "component-1",
+      task_run_id: "task-run-1",
+      proposed_text: "Rejected revision.",
+      rationale: "Clearer phrasing.",
+      confidence: "0.810",
+      warnings: [],
+      status: "proposed",
+      created_at: now,
+      decided_at: null
+    };
+    const db = createQueuedDatabase([
+      [proposedSuggestionRow],
+      [componentRow],
+      [{ ...proposedSuggestionRow, status: "rejected", decided_at: now }],
+      [{ id: "autosave-reject", document_id: "document-1", snapshot: { action: "ai_suggestion_rejected" }, created_at: now }]
+    ]);
+
+    const response = await requestApp(createTestServer(db), "POST", "/api/ai-suggestions/suggestion-1/reject");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      suggestion: {
+        id: "suggestion-1",
+        componentId: "component-1",
+        status: "rejected",
+        proposedText: "Rejected revision."
+      },
+      autosave: {
+        id: "autosave-reject",
+        documentId: "document-1"
+      }
+    });
+
+    const queryText = db.queries.map((query) => query.text).join("\n");
+    expect(queryText).toContain("update ai_suggestions");
+    expect(queryText).toContain("insert into autosave_snapshots");
+    expect(queryText).not.toContain("update review_components");
+    expect(queryText).not.toContain("component_revisions");
+    expect(queryText).not.toContain("update document_versions");
+  });
 });

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { StatusPill } from "./components/StatusPill";
 import workflowFixture from "../docs/workflow/artifact-review-0.1.0-state-workflow-definition.json";
 import {
+  acceptAiSuggestion,
   activateWorkflowDefinition,
   addAnnotation,
   addEvidence,
@@ -15,6 +16,7 @@ import {
   ingestFile,
   ingestUrl,
   listDocuments,
+  rejectAiSuggestion,
   saveDocument,
   setHighlight,
   suggestComponentRevision,
@@ -49,6 +51,7 @@ type PendingKey =
   | "evidence"
   | "highlight"
   | "ai-suggest"
+  | "ai-suggestion-action"
   | "save"
   | "workflow-action";
 
@@ -442,6 +445,34 @@ export function App() {
     setProviderReadiness(response.readiness);
     await refreshDetail(selectedDocumentId);
     setNotice(`Stored proposed suggestion ${response.suggestion.id}.`);
+  }
+
+  async function handleAcceptSuggestion(suggestionId: string) {
+    if (!selectedDocumentId) {
+      return;
+    }
+
+    setError(null);
+    const response = await runPending("ai-suggestion-action", () => acceptAiSuggestion(suggestionId));
+    setLastAutosave(response.autosave);
+    await refreshDetail(selectedDocumentId);
+    setComponentDrafts((current) => ({
+      ...current,
+      [response.component.id]: response.component.currentText
+    }));
+    setNotice(`Accepted suggestion ${response.suggestion.id}.`);
+  }
+
+  async function handleRejectSuggestion(suggestionId: string) {
+    if (!selectedDocumentId) {
+      return;
+    }
+
+    setError(null);
+    const response = await runPending("ai-suggestion-action", () => rejectAiSuggestion(suggestionId));
+    setLastAutosave(response.autosave);
+    await refreshDetail(selectedDocumentId);
+    setNotice(`Rejected suggestion ${response.suggestion.id}.`);
   }
 
   async function handleWorkflowAction(actionId: string) {
@@ -938,6 +969,29 @@ export function App() {
                           <small>
                             Task run {suggestion.taskRunId ?? "not recorded"} · {formatDateTime(suggestion.createdAt)}
                           </small>
+                          {suggestion.decidedAt ? <small>Decided {formatDateTime(suggestion.decidedAt)}</small> : null}
+                          {suggestion.status === "proposed" ? (
+                            <div className="suggestion-actions">
+                              <button
+                                className="primary-button"
+                                disabled={selectedDraftChanged || isPending("ai-suggestion-action")}
+                                title={
+                                  selectedDraftChanged
+                                    ? "Save or discard the text draft before accepting this suggestion."
+                                    : "Accept this suggestion and create an audited revision."
+                                }
+                                onClick={() => reportActionError(() => handleAcceptSuggestion(suggestion.id))}
+                              >
+                                Accept
+                              </button>
+                              <button
+                                disabled={isPending("ai-suggestion-action")}
+                                onClick={() => reportActionError(() => handleRejectSuggestion(suggestion.id))}
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          ) : null}
                         </article>
                       ))}
                     </div>

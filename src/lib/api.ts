@@ -262,6 +262,18 @@ export type SuggestComponentRevisionResponse = {
   readiness: ProviderReadiness;
 };
 
+export type AcceptAiSuggestionResponse = {
+  suggestion: AiSuggestion;
+  component: ReviewComponent;
+  revision: ComponentRevision;
+  autosave: AutosaveSnapshot;
+};
+
+export type RejectAiSuggestionResponse = {
+  suggestion: AiSuggestion;
+  autosave: AutosaveSnapshot;
+};
+
 const apiBase = import.meta.env.VITE_ARTIFACT_REVIEW_API_BASE ?? "";
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -454,4 +466,16 @@ export async function suggestComponentRevision(componentId: string): Promise<Sug
       method: "POST"
     }
   );
+}
+
+export async function acceptAiSuggestion(suggestionId: string): Promise<AcceptAiSuggestionResponse> {
+  return requestJson<AcceptAiSuggestionResponse>(`/api/ai-suggestions/${encodeURIComponent(suggestionId)}/accept`, {
+    method: "POST"
+  });
+}
+
+export async function rejectAiSuggestion(suggestionId: string): Promise<RejectAiSuggestionResponse> {
+  return requestJson<RejectAiSuggestionResponse>(`/api/ai-suggestions/${encodeURIComponent(suggestionId)}/reject`, {
+    method: "POST"
+  });
 }

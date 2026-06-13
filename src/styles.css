@@ -33,6 +33,12 @@ button {
   cursor: pointer;
 }
 
+.primary-button {
+  background: #1f5fbf;
+  border-color: #1f5fbf;
+  color: #fff;
+}
+
 button:disabled,
 input:disabled,
 select:disabled,
@@ -507,6 +513,12 @@ dd {
   display: grid;
   gap: 0.45rem;
   padding: 0.65rem;
+}
+
+.suggestion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
 
 .suggestion-card p,

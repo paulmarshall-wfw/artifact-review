@@ -38,7 +38,6 @@ Until implementation continues, these blockers can be expected depending on loca
 - no enabled registry provider supplies the required task capability
 - required provider secret reference is unavailable locally
 - provider runtime adapters are not installed unless explicit deterministic demo mode is enabled
-- AI suggestion accept/reject flow is not wired
 - export is not wired
 
 These blockers should be shown as setup state, not as broken import or review behavior.

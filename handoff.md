@@ -4,15 +4,15 @@
 
 - Project name: Artifact Review
 - Handoff type: implementation handoff
-- Updated timestamp UTC: 2026-06-13T00:26:34Z
+- Updated timestamp UTC: 2026-06-13T00:34:41Z
 - Prepared by: Codex
 - Repository, workspace, or folder: `/Users/paulmarshall/Software Development/artifact-review`
-- Branch or working context: Git branch `main`; current HEAD `fd500fb`; branch is 11 commits ahead of `origin/main`
-- Session scope: built provider-backed suggestion proposal slice.
+- Branch or working context: Git branch `main`; current HEAD `b0876e6`; branch is 12 commits ahead of `origin/main`
+- Session scope: built suggestion accept/reject slice.
 
 ### Checkpoint Status
 
-- Git HEAD: `fd500fb`
+- Git HEAD: `b0876e6`
 - Working tree: dirty
 - Dirty files intentionally in scope:
   - `docs/api-contract.md`
@@ -22,26 +22,17 @@
   - `docs/setup-readiness.md`
   - `handoff.md`
   - `service/src/http/server.ts`
-  - `service/src/providers/readiness.ts`
   - `service/src/repositories/aiSuggestions.ts`
-  - `service/src/repositories/index.ts`
   - `src/App.tsx`
   - `src/lib/api.ts`
   - `src/styles.css`
-  - `tests/helpers/http.ts`
   - `tests/http-review.test.ts`
-  - `tests/provider-readiness.test.ts`
-  - `tests/repositories.test.ts`
 - New files intentionally in scope:
-  - `service/migrations/003_provider_task_assets.sql`
-  - `service/src/providers/registry.ts`
-  - `service/src/repositories/providerTasks.ts`
+  - None
 - Dirty files intentionally out of scope:
   - None
 - Untracked files intentionally in scope:
-  - `service/migrations/003_provider_task_assets.sql`
-  - `service/src/providers/registry.ts`
-  - `service/src/repositories/providerTasks.ts`
+  - None
 - Untracked files intentionally out of scope:
   - `docs/Artefact-ReviewBuildOut.txt`
 - Canonical files described:
@@ -49,23 +40,22 @@
   - `handoff.md`
 - Last verification:
   - command: `npm run verify`
-  - result: passed with 7 test files, 1 skipped Postgres suite, 31 tests passed, and 2 skipped; lint and Vite build also passed
-  - timestamp UTC: 2026-06-13T00:22:20Z
+  - result: passed with 7 test files, 1 skipped Postgres suite, 33 tests passed, and 2 skipped; lint and Vite build also passed
+  - timestamp UTC: 2026-06-13T00:34:41Z
 - Browser validation:
   - Chrome opened `http://127.0.0.1:5182/` against the local dev stack.
-  - Confirmed provider/task readiness blockers, disabled ingest blockers, and no Chrome console errors.
-  - Limitation: `DATABASE_URL` was not configured, so migration-backed task assets, document creation, and populated suggestion UI were verified by automated tests rather than browser data flow.
+  - Confirmed the workspace rendered provider/database readiness blockers and no Chrome console errors.
+  - Limitation: `DATABASE_URL` was not configured, so document creation, populated suggestion cards, and accept/reject browser data flow were verified by automated tests rather than live browser data.
 - Local dev startup:
   - command: `npm run dev`
   - result: Vite reported `http://127.0.0.1:5182/`; service reported startup on `127.0.0.1:4793`; `DATABASE_URL` was unset so migrations were skipped
-  - limitation: separate sandboxed curl checks to `127.0.0.1` and `localhost` could not connect even though the dev session still reported running
 - Handoff freshness: fresh-to-dirty-tree
 - Safe-to-continue basis: current `HEAD`, scoped dirty files, and verification evidence are accounted for; no commit, tag, release, install, or dependency change was made.
 - Next checkpoint action: leave dirty intentionally unless the user asks to commit.
 
 ## 2. Executive Summary
 
-Current focus is Artifact Review provider-backed suggestion wiring while preserving proposal-only AI behavior.
+Current focus is Artifact Review suggestion accept/reject wiring while preserving proposal-only AI generation.
 
 Confirmed complete now:
 
@@ -73,6 +63,8 @@ Confirmed complete now:
 - Provider readiness now checks selected profile precedence, registry profile/provider lookup, task assets, provider capability, local secret availability, adapter availability, no-fallback policy, and deterministic demo mode.
 - Selected provider profile resolution uses saved `selectedProviderProfileKey` first, then first-run `INVOKE_PROVIDERS_PROFILE`; saved missing profiles block rather than falling back.
 - `POST /api/components/:componentId/ai-suggestions` now creates a task run and proposed `ai_suggestions` record in explicit deterministic demo mode without mutating component text.
+- `POST /api/ai-suggestions/:suggestionId/accept` now accepts proposed suggestions, applies proposed text through an audited `component_revisions` row with `edit_source = accepted_ai_suggestion`, records the AI suggestion ID on the revision, marks the suggestion accepted, and writes an autosave snapshot.
+- `POST /api/ai-suggestions/:suggestionId/reject` now marks proposed suggestions rejected, preserves suggestion history, writes an autosave snapshot, and does not mutate component text or create component revisions.
 - Document detail now returns AI suggestions, and the React inspector can request and display proposed suggestions with confidence, rationale, warnings, and task-run ID.
 - Typed React client calls for:
   - setup readiness and provider readiness
@@ -80,32 +72,32 @@ Confirmed complete now:
   - document list and document detail
   - file and URL ingest
   - component text autosave, annotations, questions, evidence, highlights, and document save
-  - document workflow actions and component AI suggestions
+  - document workflow actions, component AI suggestions, and suggestion accept/reject
 - Workflow setup UI validates and imports/activates the repo-stored fixture.
 - Ingest forms remain disabled until an active document workflow exists.
 - File ingest now supports selecting local `txt`, `md`, `html`, and `htm` files in the browser and loading their content into the service-backed ingest flow.
 - URL snapshot ingest remains wired for caller-supplied snapshot HTML or service-side URL fetch.
 - Review workspace now renders repository-backed document rows, document detail, grouped review components, search, selected-component focus, expand/collapse controls, inline detail/highlight controls, open/closed detail drawer state, autosave/save feedback, review records, and backend-derived workflow actions.
 - Provider suggestion button remains readiness-gated and creates proposals only when readiness passes.
+- React suggestion cards now expose Accept and Reject actions for proposed suggestions and keep accepted/rejected suggestions visible as history.
 
 Incomplete now:
 
 - `state-workflow-runtime` is not installed or wired because dependency installation has not been explicitly approved.
 - Real registry provider adapter execution is still blocked until provider runtime adapters are explicitly approved and installed.
-- Suggestion accept/reject, same-format export, database-backed Chrome UI validation, and Tauri validation are still pending.
+- Same-format export, database-backed Chrome UI validation, and Tauri validation are still pending.
 
 Completed work history is tracked in `docs/completed-tasks.md`; do not duplicate it here.
 
 ## 3. Current Objective
 
-Continue after the provider-backed suggestion proposal slice.
+Continue after the suggestion accept/reject slice.
 
 Definition of done for the next workstream:
 
-- Run database-backed Chrome/browser UI validation once a reachable dev server with `DATABASE_URL` is available.
+- Run database-backed Chrome/browser UI validation once a reachable dev server with `DATABASE_URL` and populated suggestion history is available.
 - Run `npm run tauri:dev` after browser UI validation.
 - Wire real registry provider adapter execution once the provider runtime dependency is explicitly approved and installed.
-- Implement suggestion accept/reject as separate audited user actions.
 - Preserve backend-owned workflow state; React must keep rendering allowed actions from service responses.
 - Preserve stable component IDs, source mappings, original text hashes, and imported source snapshots.
 - Do not install `state-workflow-runtime`, provider runtime packages, or other dependencies unless explicitly approved.
@@ -131,7 +123,9 @@ Definition of done for the next workstream:
 - Provider task assets are seeded by `003_provider_task_assets.sql`.
 - `/api/provider-readiness` and `/api/provider-readiness/tasks/:taskKey` use registry/profile/provider/task readiness context.
 - `/api/components/:componentId/ai-suggestions` stores proposed suggestions only in explicit deterministic demo mode.
-- React component detail shows provider readiness and proposed AI suggestions.
+- `/api/ai-suggestions/:suggestionId/accept` applies proposed suggestion text through an audited component revision and autosave snapshot.
+- `/api/ai-suggestions/:suggestionId/reject` records the rejected suggestion decision and autosave snapshot without mutating component text.
+- React component detail shows provider readiness, proposed AI suggestions, and accept/reject controls for proposed items.
 
 ### Partially Working
 
@@ -142,7 +136,6 @@ Definition of done for the next workstream:
 ### Not Working Yet
 
 - `state-workflow-runtime` adapter remains blocked until dependency installation is explicitly approved.
-- Suggestion accept/reject.
 - Same-format export.
 - Real registry provider adapter execution.
 
@@ -169,7 +162,7 @@ Definition of done for the next workstream:
 Most recent verified commands:
 
 - `npm run lint`: passed.
-- `npm run verify`: passed with 7 test files, 1 skipped Postgres suite, 31 tests passed, and 2 skipped; Vite production build passed.
+- `npm run verify`: passed with 7 test files, 1 skipped Postgres suite, 33 tests passed, and 2 skipped; Vite production build passed.
 - `npm run dev`: reported Vite on `http://127.0.0.1:5182/` and service startup on `127.0.0.1:4793`; Chrome smoke validation passed with no console errors.
 
 Environment notes:
@@ -199,9 +192,8 @@ Environment notes:
 
 Next:
 
-- Run Chrome/browser UI validation once a reachable dev server with a configured database is available.
+- Run Chrome/browser UI validation once a reachable dev server with a configured database and populated suggestion history is available.
 - Run `npm run tauri:dev` after browser UI validation.
-- Implement suggestion accept/reject as separate audited user actions.
 
 Blocked or deferred:
 
@@ -213,4 +205,4 @@ Blocked or deferred:
 
 ## 9. Ready-Made Prompt for Starting a New Thread
 
-Read `handoff.md` as the hot-context source for `/Users/paulmarshall/Software Development/artifact-review`. Treat the current dirty tree as intentional and do not reset or discard changes. Review `AGENTS.md`, `docs/implementation-sequence.md`, `docs/api-contract.md`, `src/lib/api.ts`, `src/App.tsx`, `src/styles.css`, `service/src/http/server.ts`, `service/src/providers/readiness.ts`, `service/src/providers/registry.ts`, `service/src/repositories/providerTasks.ts`, and `service/migrations/003_provider_task_assets.sql` first. Continue after the provider-backed suggestion proposal slice. Preserve backend-owned workflow state, stable component IDs, source mappings, original text hashes, immutable imported source snapshots, and provider proposal-only boundaries. Do not install dependencies, commit, release, or wire provider/runtime packages unless explicitly approved.
+Read `handoff.md` as the hot-context source for `/Users/paulmarshall/Software Development/artifact-review`. Treat the current dirty tree as intentional and do not reset or discard changes. Review `AGENTS.md`, `docs/implementation-sequence.md`, `docs/api-contract.md`, `src/lib/api.ts`, `src/App.tsx`, `src/styles.css`, `service/src/http/server.ts`, `service/src/repositories/aiSuggestions.ts`, `service/src/providers/readiness.ts`, `service/src/providers/registry.ts`, `service/src/repositories/providerTasks.ts`, and `service/migrations/003_provider_task_assets.sql` first. Continue after the suggestion accept/reject slice. Preserve backend-owned workflow state, stable component IDs, source mappings, original text hashes, immutable imported source snapshots, and provider proposal-only boundaries. Do not install dependencies, commit, release, or wire provider/runtime packages unless explicitly approved.
