@@ -22,6 +22,7 @@ import type { DocumentSummary, ReviewComponent } from "../repositories/documents
 import { createRepositories, type Repositories } from "../repositories/index.js";
 import type { ReviewComponentForMutation } from "../repositories/review.js";
 import type { JsonValue } from "../repositories/types.js";
+import { artifactReviewRenderSlots, isKnownArtifactReviewRenderSlot } from "../settings/renderSlots.js";
 import {
   activateDocumentWorkflow,
   executeDocumentWorkflowAction,
@@ -87,6 +88,17 @@ const providerSettingsRequestSchema = z.object({
   demoProviderMode: z.boolean()
 });
 
+const taskRouteRequestSchema = z.object({
+  providerKey: nullableTrimmedStringSchema,
+  renderSlot: z.string().trim().min(1).optional(),
+  hookKey: z.string().trim().min(1).optional(),
+  displayOrder: z.number().int().min(0).max(10000).optional(),
+  enabled: z.boolean().optional(),
+  modelOverride: nullableTrimmedStringSchema,
+  displayLabel: nullableTrimmedStringSchema,
+  displayDescription: nullableTrimmedStringSchema
+});
+
 function toSafeJson(value: unknown): JsonValue {
   return JSON.parse(JSON.stringify(value)) as JsonValue;
 }
@@ -141,6 +153,139 @@ async function buildProviderSettingsResponse(config: AppConfig, repositories: Re
       demoProviderMode: saved.demoProviderMode ?? null
     }
   };
+}
+
+async function listRenderSlotActions(config: AppConfig, repositories: Repositories | null, slot: string) {
+  if (!repositories) {
+    return [];
+  }
+  return await createArtifactReviewProviderRuntime(config, repositories).getRenderSlotActions(slot);
+}
+
+async function buildSettingsReadiness(config: AppConfig, repositories: Repositories | null, pool: pg.Pool | null) {
+  const database = await checkDatabase(pool);
+  const activeWorkflow = repositories ? await getActiveDocumentWorkflow(repositories) : null;
+  const provider = await createArtifactReviewProviderRuntime(config, repositories).getReadiness();
+  const workflow = buildWorkflowReadiness(Boolean(activeWorkflow));
+
+  return combineReadiness([
+    { key: "database", label: "Database", ready: database.ready, reason: database.reason },
+    ...workflow.checks,
+    ...provider.checks
+  ]);
+}
+
+async function buildSettingsSummary(config: AppConfig, repositories: Repositories | null, pool: pg.Pool | null) {
+  const [settings, readiness, activeWorkflow, taskRoutes, taskRuns] = await Promise.all([
+    buildProviderSettingsResponse(config, repositories),
+    buildSettingsReadiness(config, repositories, pool),
+    repositories ? getActiveDocumentWorkflow(repositories) : Promise.resolve(null),
+    repositories ? repositories.providerTasks.listTaskRoutes() : Promise.resolve([]),
+    repositories ? repositories.taskRuns.listTaskRuns(25) : Promise.resolve([])
+  ]);
+  const renderSlots = await Promise.all(
+    artifactReviewRenderSlots.map(async (definition) => {
+      const actions = await listRenderSlotActions(config, repositories, definition.slot);
+      return {
+        ...definition,
+        actionCount: actions.length,
+        readyActionCount: actions.filter((action) => action.ready).length,
+        taskKeys: actions.map((action) => action.taskKey)
+      };
+    })
+  );
+
+  return {
+    providerRegistry: settings,
+    workflow: {
+      active: Boolean(activeWorkflow),
+      workflow: activeWorkflow ? summarizeWorkflowDefinition(activeWorkflow) : null,
+      readiness: buildWorkflowReadiness(Boolean(activeWorkflow))
+    },
+    readiness,
+    taskRoutes,
+    renderSlots,
+    taskRuns
+  };
+}
+
+async function invokeComponentTaskAction(
+  config: AppConfig,
+  repositories: Repositories,
+  componentId: string,
+  taskKey: string
+) {
+  const providerRuntime = createArtifactReviewProviderRuntime(config, repositories);
+  const actions = await providerRuntime.getRenderSlotActions("component.inline.aiSuggest");
+  const action = actions.find((entry) => entry.taskKey === taskKey);
+
+  if (!action) {
+    return {
+      status: 404,
+      body: {
+        error: "task_action_not_found",
+        taskKey,
+        renderSlot: "component.inline.aiSuggest"
+      }
+    } as const;
+  }
+
+  const readiness = await providerRuntime.getReadiness(taskKey);
+  if (!readiness.ready || !action.ready) {
+    return {
+      status: 409,
+      body: {
+        error: "provider_not_ready",
+        componentId,
+        readiness
+      }
+    } as const;
+  }
+
+  if (taskKey !== suggestComponentRevisionTaskKey) {
+    return {
+      status: 409,
+      body: {
+        error: "task_action_not_supported",
+        taskKey,
+        message: "Only AI suggestion task actions are currently executable from component inline slots."
+      }
+    } as const;
+  }
+
+  const component = await repositories.review.getComponent(componentId);
+  if (!component) {
+    return {
+      status: 404,
+      body: {
+        error: "component_not_found",
+        componentId
+      }
+    } as const;
+  }
+
+  const invocation = await providerRuntime.invokeSuggestComponentRevision(component);
+
+  if (!invocation.ok) {
+    return {
+      status: 502,
+      body: {
+        error: invocation.error,
+        componentId: component.id,
+        taskRun: invocation.taskRun
+      }
+    } as const;
+  }
+
+  return {
+    status: 201,
+    body: {
+      suggestion: invocation.suggestion,
+      taskRun: invocation.taskRun,
+      output: invocation.output,
+      readiness
+    }
+  } as const;
 }
 
 async function buildReviewStateSnapshot(
@@ -344,6 +489,159 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       active: Boolean(activeWorkflow),
       workflow: activeWorkflow ? summarizeWorkflowDefinition(activeWorkflow) : null,
       readiness: buildWorkflowReadiness(Boolean(activeWorkflow))
+    });
+  });
+
+  app.get("/api/settings", async (_request, response) => {
+    response.json(await buildSettingsSummary(config, repositories, pool));
+  });
+
+  app.get("/api/settings/readiness", async (_request, response) => {
+    response.json(await buildSettingsReadiness(config, repositories, pool));
+  });
+
+  app.patch("/api/settings/provider-registry", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before saving provider registry settings."
+      });
+      return;
+    }
+
+    const parsed = providerSettingsRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json({
+        error: "invalid_provider_registry_settings",
+        issues: parsed.error.issues.map((issue) => issue.message)
+      });
+      return;
+    }
+
+    await repositories.appSettings.setProviderRuntimeSettings({
+      registryUrl: parsed.data.registryUrl ?? undefined,
+      selectedProviderProfileKey: parsed.data.selectedProviderProfileKey ?? undefined,
+      demoProviderMode: parsed.data.demoProviderMode
+    });
+
+    response.json(await buildSettingsSummary(config, repositories, pool));
+  });
+
+  app.post("/api/settings/providers/refresh", async (_request, response) => {
+    const [settings, provider, summary] = await Promise.all([
+      buildProviderSettingsResponse(config, repositories),
+      createArtifactReviewProviderRuntime(config, repositories).getReadiness(),
+      buildSettingsSummary(config, repositories, pool)
+    ]);
+
+    response.json({
+      settings,
+      readiness: provider,
+      summary
+    });
+  });
+
+  app.get("/api/settings/render-slots", async (_request, response) => {
+    const taskRoutes = repositories ? await repositories.providerTasks.listTaskRoutes() : [];
+    const taskKeysBySlot = new Map<string, string[]>();
+    for (const route of taskRoutes) {
+      const existing = taskKeysBySlot.get(route.renderSlot) ?? [];
+      existing.push(route.taskKey);
+      taskKeysBySlot.set(route.renderSlot, existing);
+    }
+
+    response.json({
+      renderSlots: await Promise.all(
+        artifactReviewRenderSlots.map(async (definition) => {
+          const actions = await listRenderSlotActions(config, repositories, definition.slot);
+          return {
+            ...definition,
+            actionCount: actions.length,
+            readyActionCount: actions.filter((action) => action.ready).length,
+            taskKeys: taskKeysBySlot.get(definition.slot) ?? []
+          };
+        })
+      )
+    });
+  });
+
+  app.get("/api/settings/render-slots/:slot/actions", async (request, response) => {
+    const slot = request.params.slot;
+    if (!isKnownArtifactReviewRenderSlot(slot)) {
+      response.status(404).json({
+        error: "render_slot_not_found",
+        slot
+      });
+      return;
+    }
+
+    response.json({
+      slot,
+      actions: await listRenderSlotActions(config, repositories, slot)
+    });
+  });
+
+  app.get("/api/settings/task-runs", async (_request, response) => {
+    response.json({
+      taskRuns: repositories ? await repositories.taskRuns.listTaskRuns(50) : []
+    });
+  });
+
+  app.patch("/api/settings/tasks/:taskKey/route", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before editing task routes."
+      });
+      return;
+    }
+
+    const parsed = taskRouteRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      response.status(422).json({
+        error: "invalid_task_route",
+        issues: parsed.error.issues.map((issue) => issue.message)
+      });
+      return;
+    }
+
+    if (parsed.data.renderSlot && !isKnownArtifactReviewRenderSlot(parsed.data.renderSlot)) {
+      response.status(422).json({
+        error: "invalid_task_route",
+        issues: [`Render slot ${parsed.data.renderSlot} is not predefined for Artifact Review.`]
+      });
+      return;
+    }
+
+    if (parsed.data.hookKey) {
+      const hooks = await repositories.providerTasks.listProcessingHooks();
+      if (!hooks.some((hook) => hook.hook_key === parsed.data.hookKey)) {
+        response.status(422).json({
+          error: "invalid_task_route",
+          issues: [`Hook ${parsed.data.hookKey} is not registered.`]
+        });
+        return;
+      }
+    }
+
+    const route = await repositories.providerTasks.updateTaskRoute(request.params.taskKey, parsed.data);
+    if (!route) {
+      response.status(404).json({
+        error: "task_route_not_found",
+        taskKey: request.params.taskKey
+      });
+      return;
+    }
+
+    const [readiness, actions] = await Promise.all([
+      createArtifactReviewProviderRuntime(config, repositories).getReadiness(route.taskKey),
+      listRenderSlotActions(config, repositories, route.renderSlot)
+    ]);
+
+    response.json({
+      route,
+      readiness,
+      actions
     });
   });
 
@@ -1107,43 +1405,31 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
       return;
     }
 
-    const providerRuntime = createArtifactReviewProviderRuntime(config, repositories);
-    const readiness = await providerRuntime.getReadiness(suggestComponentRevisionTaskKey);
-    if (!readiness.ready) {
+    const result = await invokeComponentTaskAction(
+      config,
+      repositories,
+      request.params.componentId,
+      suggestComponentRevisionTaskKey
+    );
+    response.status(result.status).json(result.body);
+  });
+
+  app.post("/api/components/:componentId/task-actions/:taskKey", async (request, response) => {
+    if (!repositories) {
       response.status(409).json({
-        error: "provider_not_ready",
-        componentId: request.params.componentId,
-        readiness
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before executing provider-backed task actions."
       });
       return;
     }
 
-    const component = await repositories.review.getComponent(request.params.componentId);
-    if (!component) {
-      response.status(404).json({
-        error: "component_not_found",
-        componentId: request.params.componentId
-      });
-      return;
-    }
-
-    const invocation = await providerRuntime.invokeSuggestComponentRevision(component);
-
-    if (!invocation.ok) {
-      response.status(502).json({
-        error: invocation.error,
-        componentId: component.id,
-        taskRun: invocation.taskRun
-      });
-      return;
-    }
-
-    response.status(201).json({
-      suggestion: invocation.suggestion,
-      taskRun: invocation.taskRun,
-      output: invocation.output,
-      readiness
-    });
+    const result = await invokeComponentTaskAction(
+      config,
+      repositories,
+      request.params.componentId,
+      request.params.taskKey
+    );
+    response.status(result.status).json(result.body);
   });
 
   app.post("/api/ai-suggestions/:suggestionId/accept", async (request, response) => {

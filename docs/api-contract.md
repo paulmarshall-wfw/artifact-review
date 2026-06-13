@@ -14,6 +14,14 @@ Artifact Review uses a local TypeScript service as the only HTTP API boundary fo
 | `GET` | `/api/provider-settings` | Returns effective provider runtime settings and whether each value came from saved app settings, environment bootstrap, or neither. |
 | `PUT` | `/api/provider-settings` | Saves non-secret provider runtime settings: registry URL, selected profile key, and explicit deterministic demo mode. Requires `DATABASE_URL`. |
 | `GET` | `/api/workflow/status` | Returns active document workflow status, active workflow summary, and workflow readiness. |
+| `GET` | `/api/settings` | Returns the service-backed Settings summary: provider registry settings, workflow status, combined readiness, task routes, predefined render slots, and recent task runs. |
+| `GET` | `/api/settings/readiness` | Returns combined Settings readiness for database, workflow, and provider runtime state. |
+| `PATCH` | `/api/settings/provider-registry` | Saves non-secret provider registry/profile/demo settings and returns a refreshed Settings summary. Requires `DATABASE_URL`. |
+| `POST` | `/api/settings/providers/refresh` | Recomputes provider readiness and returns provider settings plus a refreshed Settings summary without mutating saved settings. |
+| `GET` | `/api/settings/render-slots` | Lists predefined Artifact Review landing areas with current task assignments and ready-action counts. |
+| `GET` | `/api/settings/render-slots/:slot/actions` | Lists provider task actions for a predefined render slot, sorted by display order and readiness. |
+| `GET` | `/api/settings/task-runs` | Lists recent provider task runs for Settings diagnostics. |
+| `PATCH` | `/api/settings/tasks/:taskKey/route` | Edits task route metadata including provider key, render slot, hook key, display order, enabled state, model override, and display metadata. Requires `DATABASE_URL`. |
 | `POST` | `/api/workflow/definitions/validate` | Validates a user-provided document workflow definition without activating it. |
 | `POST` | `/api/workflow/activate` | Validates and stores a user-provided active document workflow when `DATABASE_URL` is configured. |
 | `GET` | `/api/documents` | Returns repository-backed document summaries when `DATABASE_URL` is configured; otherwise returns an empty list. |
@@ -29,7 +37,8 @@ Artifact Review uses a local TypeScript service as the only HTTP API boundary fo
 | `PATCH` | `/api/components/:componentId/highlight` | Enables or disables component highlight state and records an autosave snapshot. |
 | `POST` | `/api/documents/:documentId/save` | Promotes current reviewed state to a new durable document version while preserving the imported source snapshot. |
 | `POST` | `/api/documents/:documentId/export` | Builds same-format reviewed output for `txt`, `md`, `html`, `htm`, and URL snapshots; optionally writes a JSON review bundle beside the export. If `destinationPath` is supplied, the service writes local files and returns paths. Otherwise it returns downloadable content. |
-| `POST` | `/api/components/:componentId/ai-suggestions` | Blocks when task-specific provider readiness fails; invokes `suggest-component-revision` through the service-owned provider runtime facade, validates structured output, writes a task run, and stores a proposed `ai_suggestions` record without mutating component text. Explicit deterministic demo mode uses the same invocation path with a local deterministic adapter. |
+| `POST` | `/api/components/:componentId/task-actions/:taskKey` | Executes a component inline task action when it is assigned to `component.inline.aiSuggest`; currently supports `suggest-component-revision` and creates proposal-only AI suggestions. |
+| `POST` | `/api/components/:componentId/ai-suggestions` | Compatibility path for `suggest-component-revision`; blocks when task-specific provider readiness fails, invokes through the service-owned provider runtime facade, validates structured output, writes a task run, and stores a proposed `ai_suggestions` record without mutating component text. Explicit deterministic demo mode uses the same invocation path with a local deterministic adapter. |
 | `POST` | `/api/ai-suggestions/:suggestionId/accept` | Accepts a proposed AI suggestion, updates component text, creates an audited `component_revisions` row with `edit_source = accepted_ai_suggestion`, marks the suggestion accepted, and writes an autosave snapshot. |
 | `POST` | `/api/ai-suggestions/:suggestionId/reject` | Rejects a proposed AI suggestion, preserves suggestion history, writes an autosave snapshot, and does not mutate component text or create a component revision. |
 | `GET` | `/api/task-runs/:taskRunId` | Returns repository-backed task-run provenance when present; otherwise returns `404 task_run_not_found`. |
@@ -53,7 +62,11 @@ These routes are reserved by the MVP plan and should be implemented incrementall
 - Provider output must never directly mutate document text. Provider invocation creates proposed suggestions only.
 - Provider readiness checks the selected profile, registry profile/provider lookup, task definition, prompt version, structured output schema, processing hook, required provider capability, local secret availability, adapter availability, no-fallback policy, and deterministic demo mode.
 - Provider settings can be configured in the app and are persisted in `app_settings`. Saved provider registry URL, selected provider profile, and demo mode take precedence over first-run environment values.
+- Settings is the primary setup surface. It exposes Workflow, Provider Registry, AI Tasks, Landing Areas, Diagnostics, and Ingest sections from service-backed summary data.
 - Selected provider profile precedence is saved `selectedProviderProfileKey` first, then first-run `INVOKE_PROVIDERS_PROFILE`; a saved missing profile must block provider-backed actions instead of falling back.
+- Predefined render slots are `component.inline.aiSuggest`, `component.inline.textTools`, `component.drawer.noteDraft`, `section.toolbar`, `document.toolbar`, `document.footer`, and `admin.diagnostics`. Custom user-created slots are deferred.
+- Task route saves validate render slots against the predefined registry and validate hook keys against registered processing hooks. Provider/runtime readiness is returned after save so the UI can show blockers without treating frontend state as authoritative.
+- Component inline AI Suggest is selected from `GET /api/settings/render-slots/component.inline.aiSuggest/actions`; AI output remains proposal-only until the user explicitly accepts a suggestion.
 - Deterministic provider behavior is available only when explicit demo mode is enabled through saved app settings or `ARTIFACT_REVIEW_DEMO_PROVIDER_MODE=true`; real registry provider adapter execution requires a reachable registry profile, a selected provider with a registered adapter, and any required local secret reference.
 - Provider settings saves accept `{ registryUrl: string | null, selectedProviderProfileKey: string | null, demoProviderMode: boolean }`; raw provider secrets must never be saved through this endpoint.
 - Workflow state must be returned by the service and must not be inferred as durable truth in React.

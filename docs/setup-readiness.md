@@ -28,8 +28,24 @@ Copy `.env.example` to `.env` and fill values appropriate for local development.
 | `GET /api/provider-readiness/tasks/:taskKey` | Provider readiness and invocation summary for a task key. |
 | `GET /api/provider-settings` | Effective provider registry URL, selected profile, demo mode, and value sources. |
 | `PUT /api/provider-settings` | Saves non-secret provider runtime settings in app settings. |
+| `GET /api/settings` | Full Settings summary for workflow, provider registry, task routes, predefined landing areas, readiness, and recent task runs. |
+| `PATCH /api/settings/provider-registry` | Saves non-secret provider registry settings and returns refreshed Settings summary data. |
+| `POST /api/settings/providers/refresh` | Recomputes provider readiness without changing saved settings. |
+| `GET /api/settings/render-slots` | Lists predefined render slots and current task assignments. |
+| `GET /api/settings/render-slots/:slot/actions` | Lists slot-driven task actions and readiness reasons. |
+| `GET /api/settings/task-runs` | Lists recent task runs for diagnostics. |
+| `PATCH /api/settings/tasks/:taskKey/route` | Saves editable task-route metadata after render-slot and hook validation. |
 
 ## In-App Settings
+
+Settings is organized as a left section navigator with focused detail panels:
+
+- Workflow: import/activation/status and workflow readiness.
+- Provider Registry: registry URL, selected profile, demo mode, refresh, catalog status, and provider readiness.
+- AI Tasks: editable task route fields for provider key, hook, render slot, order, enabled state, model override, and display metadata.
+- Landing Areas: predefined render slots and current task assignments.
+- Diagnostics: setup/provider readiness plus recent task runs.
+- Ingest: file and URL ingest, still blocked until an active workflow exists.
 
 The Settings section can save:
 
@@ -40,6 +56,8 @@ The Settings section can save:
 These settings are stored in `app_settings` and take precedence over first-run environment values. Clearing a text field removes the saved value and allows the corresponding environment bootstrap value to apply again. Raw provider secrets remain outside Postgres and are only checked through local secret references.
 
 Provider-backed actions should use task-specific readiness. The component detail panel shows the selected provider, profile, adapter, prompt version, demo-mode state, and `externalSend` before `AI Suggest` can be invoked. Suggestions keep task-run provenance visible with provider/profile, validation status, latency, and external-send state.
+
+The component inline AI Suggest button is driven by the `component.inline.aiSuggest` render slot. It still creates proposed suggestions only; accepting or rejecting a suggestion remains a separate explicit user action.
 
 ## Expected First-Run Blockers
 

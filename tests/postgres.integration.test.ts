@@ -54,7 +54,8 @@ describePostgres("Postgres persistence integration", () => {
       "001_initial_schema.sql",
       "002_review_and_provider_records.sql",
       "003_provider_task_assets.sql",
-      "004_block_future_provider_task_hooks.sql"
+      "004_block_future_provider_task_hooks.sql",
+      "005_task_route_settings.sql"
     ]);
     expect(firstRun.skipped).toEqual([]);
     expect(secondRun.applied).toEqual([]);
@@ -62,7 +63,8 @@ describePostgres("Postgres persistence integration", () => {
       "001_initial_schema.sql",
       "002_review_and_provider_records.sql",
       "003_provider_task_assets.sql",
-      "004_block_future_provider_task_hooks.sql"
+      "004_block_future_provider_task_hooks.sql",
+      "005_task_route_settings.sql"
     ]);
     expect(tables.rows.map((row) => row.table_name)).toEqual(
       expect.arrayContaining([

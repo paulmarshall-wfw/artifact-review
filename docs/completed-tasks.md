@@ -4,6 +4,11 @@ Append brief entries here when project work is completed. Keep this file concise
 
 ## 2026-06-13
 
+- Task: Reorganize Settings and provider task actions.
+  Outcome: Replaced the flat Admin / Setup page with a Settings workspace with section navigation for Workflow, Provider Registry, AI Tasks, Landing Areas, Diagnostics, and Ingest. Added service-backed Settings APIs, predefined render slots, editable task-route metadata, task-run diagnostics listing, and slot-driven component inline AI Suggest actions while preserving proposal-only accept/reject behavior and keeping ingest blocked until an active workflow exists.
+  Verification: `npm run verify` passed with 10 test files, 1 skipped Postgres suite, 48 tests passed, and 2 skipped; Vite production build passed. Chrome smoke against `http://127.0.0.1:5184/` confirmed Settings sections render, predefined landing areas appear without a configured database, ingest controls stay disabled without an active workflow, desktop layout has no horizontal overflow, and Chrome reported no console errors. Narrow viewport resizing was unavailable through the current Chrome automation backend.
+  Traceability: Git branch `main`; no commit yet; changed Settings API/service code, task-route migration/repositories, React API/UI, styles, focused tests, API/setup/data/verification docs, completed-task ledger, and handoff.
+
 - Task: Split durable provider configuration into a separate Settings tab.
   Outcome: Added a Settings navigation item, moved provider registry/profile/demo-mode controls out of Providers, kept Providers focused on readiness diagnostics, and added a compact settings summary for current source/effective state.
   Verification: `npm run verify` passed with 10 test files, 1 skipped Postgres suite, 42 tests passed, and 2 skipped; Vite production build passed. Chrome smoke against `http://127.0.0.1:5182/` confirmed the Settings nav item exists, Providers no longer contains the settings form, Settings contains the form, and Chrome reported no console errors.

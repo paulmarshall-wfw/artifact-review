@@ -219,4 +219,60 @@ describe("repositories", () => {
     expect(db.queries[0]?.text).toContain("from task_definitions");
     expect(db.queries[0]?.values).toEqual(["suggest-component-revision"]);
   });
+
+  it("maps and updates task route settings", async () => {
+    const row = {
+      task_key: "suggest-component-revision",
+      provider_key: null,
+      required_capability: "llm.generateJson",
+      prompt_version: "0.1.0",
+      render_slot: "component.inline.aiSuggest",
+      hook_key: "store-ai-suggestion",
+      display_order: 10,
+      enabled: true,
+      model_override: null,
+      display_label: "AI Suggest",
+      display_description: "Propose a component text revision.",
+      prompt: { name: "suggest-component-revision" },
+      schema_version: "0.1.0",
+      schema: { type: "object" },
+      hook_implementation_key: "store-ai-suggestion",
+      hook_policy: "block_when_missing"
+    };
+    const updatedRow = {
+      ...row,
+      provider_key: "openai-compatible",
+      render_slot: "document.toolbar",
+      display_order: 40,
+      model_override: "gpt-4.1-mini"
+    };
+    const db = createQueuedDatabase([[row], [], [updatedRow]]);
+    const repository = new ProviderTasksRepository(db);
+
+    await expect(repository.updateTaskRoute("suggest-component-revision", {
+      providerKey: "openai-compatible",
+      renderSlot: "document.toolbar",
+      displayOrder: 40,
+      modelOverride: "gpt-4.1-mini"
+    })).resolves.toMatchObject({
+      taskKey: "suggest-component-revision",
+      providerKey: "openai-compatible",
+      renderSlot: "document.toolbar",
+      displayOrder: 40,
+      modelOverride: "gpt-4.1-mini",
+      hookReady: true
+    });
+    expect(db.queries[1]?.text).toContain("update task_definitions");
+    expect(db.queries[1]?.values).toEqual([
+      "suggest-component-revision",
+      "openai-compatible",
+      "document.toolbar",
+      "store-ai-suggestion",
+      40,
+      true,
+      "gpt-4.1-mini",
+      "AI Suggest",
+      "Propose a component text revision."
+    ]);
+  });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { StatusPill } from "./components/StatusPill";
 import workflowFixture from "../docs/workflow/artifact-review-0.1.0-state-workflow-definition.json";
 import {
@@ -11,9 +11,10 @@ import {
   exportDocument,
   getDocumentDetail,
   getDocumentWorkflowActions,
-  getProviderReadiness,
   getProviderReadinessForTask,
-  getProviderSettings,
+  getProviderReadiness,
+  getRenderSlotActions,
+  getSettingsSummary,
   getSetupReadiness,
   getTaskRun,
   getWorkflowStatus,
@@ -22,7 +23,8 @@ import {
   listDocuments,
   rejectAiSuggestion,
   saveDocument,
-  saveProviderSettings,
+  saveProviderRegistrySettings,
+  saveTaskRoute,
   setHighlight,
   suggestComponentRevision,
   updateComponentText,
@@ -35,7 +37,12 @@ import {
   type ExportedFile,
   type ProviderReadiness,
   type ProviderSettings,
+  type RenderSlotAction,
+  type RenderSlotSummary,
+  type SettingsSummary,
   type SetupReadiness,
+  type TaskRouteSaveRequest,
+  type TaskRouteSummary,
   type TaskRun,
   type WorkflowStatus,
   type WorkflowValidationResult
@@ -44,6 +51,7 @@ import { isTauriRuntime, revealExportedFile, selectExportDestination } from "./l
 
 const fixtureDefinition = workflowFixture as unknown;
 const suggestComponentRevisionTaskKey = "suggest-component-revision";
+const inlineAiSuggestSlot = "component.inline.aiSuggest";
 const defaultFileContent =
   "Paste or type text for review. Each sentence becomes a review component. Add enough content to make the workspace useful.";
 
@@ -52,6 +60,8 @@ type PendingKey =
   | "workflow-validate"
   | "workflow-activate"
   | "provider-settings"
+  | "provider-refresh"
+  | "task-route"
   | "file-read"
   | "file-ingest"
   | "url-ingest"
@@ -67,7 +77,8 @@ type PendingKey =
   | "export"
   | "workflow-action";
 
-type AppPage = "review" | "admin";
+type AppPage = "review" | "settings";
+type SettingsSection = "workflow" | "provider" | "tasks" | "landing" | "diagnostics" | "ingest";
 type ReviewViewMode = "normal" | "focus";
 type InlineReviewTab = "text" | "annotations" | "questions" | "evidence" | "ai";
 
@@ -96,6 +107,17 @@ type ProviderSettingsForm = {
   demoProviderMode: boolean;
 };
 
+type TaskRouteDraft = {
+  providerKey: string;
+  renderSlot: string;
+  hookKey: string;
+  displayOrder: string;
+  enabled: boolean;
+  modelOverride: string;
+  displayLabel: string;
+  displayDescription: string;
+};
+
 type ComponentSection = {
   id: string;
   label: string;
@@ -118,6 +140,7 @@ type ComponentCounts = {
 
 export function App() {
   const [activePage, setActivePage] = useState<AppPage>("review");
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("workflow");
   const [reviewViewMode, setReviewViewMode] = useState<ReviewViewMode>("normal");
   const [selectedInlineTab, setSelectedInlineTab] = useState<InlineReviewTab>("text");
   const [selectedBucketId, setSelectedBucketId] = useState("all");
@@ -126,11 +149,14 @@ export function App() {
   const [providerReadiness, setProviderReadiness] = useState<ProviderReadiness | null>(null);
   const [suggestionReadiness, setSuggestionReadiness] = useState<(ProviderReadiness & { taskKey: string }) | null>(null);
   const [providerSettings, setProviderSettings] = useState<ProviderSettings | null>(null);
+  const [settingsSummary, setSettingsSummary] = useState<SettingsSummary | null>(null);
+  const [inlineAiSuggestActions, setInlineAiSuggestActions] = useState<RenderSlotAction[]>([]);
   const [providerSettingsForm, setProviderSettingsForm] = useState<ProviderSettingsForm>({
     registryUrl: "",
     selectedProviderProfileKey: "",
     demoProviderMode: false
   });
+  const [taskRouteDrafts, setTaskRouteDrafts] = useState<Record<string, TaskRouteDraft>>({});
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatus | null>(null);
   const [workflowValidation, setWorkflowValidation] = useState<WorkflowValidationResult | null>(null);
   const [documents, setDocuments] = useState<DocumentSummary[]>([]);
@@ -310,28 +336,44 @@ export function App() {
     }
   }, []);
 
+  const applySettingsSummary = useCallback((summary: SettingsSummary) => {
+    setSettingsSummary(summary);
+    setProviderSettings(summary.providerRegistry);
+    setProviderSettingsForm({
+      registryUrl: summary.providerRegistry.registryUrl,
+      selectedProviderProfileKey: summary.providerRegistry.selectedProviderProfileKey,
+      demoProviderMode: summary.providerRegistry.demoProviderMode
+    });
+    setWorkflowStatus(summary.workflow);
+    setSetupReadiness(summary.readiness);
+    setTaskRouteDrafts((current) => {
+      const next: Record<string, TaskRouteDraft> = {};
+      for (const route of summary.taskRoutes) {
+        next[route.taskKey] = current[route.taskKey] ?? taskRouteToDraft(route);
+      }
+      return next;
+    });
+  }, []);
+
   const refreshGlobal = useCallback(async () => {
-    const [setup, provider, suggestionProvider, settings, workflow, documentList] = await Promise.all([
+    const [setup, provider, suggestionProvider, settings, aiSuggestActions, workflow, documentList] = await Promise.all([
       getSetupReadiness(),
       getProviderReadiness(),
       getProviderReadinessForTask(suggestComponentRevisionTaskKey),
-      getProviderSettings(),
+      getSettingsSummary(),
+      getRenderSlotActions(inlineAiSuggestSlot),
       getWorkflowStatus(),
       listDocuments()
     ]);
     setSetupReadiness(setup);
     setProviderReadiness(provider);
     setSuggestionReadiness(suggestionProvider);
-    setProviderSettings(settings);
-    setProviderSettingsForm({
-      registryUrl: settings.registryUrl,
-      selectedProviderProfileKey: settings.selectedProviderProfileKey,
-      demoProviderMode: settings.demoProviderMode
-    });
+    setInlineAiSuggestActions(aiSuggestActions.actions);
+    applySettingsSummary(settings);
     setWorkflowStatus(workflow);
     setDocuments(documentList.documents);
     setSelectedDocumentId((current) => current ?? documentList.documents[0]?.id ?? null);
-  }, []);
+  }, [applySettingsSummary]);
 
   const refreshDetail = useCallback(async (documentId: string) => {
     const [detail, actions] = await Promise.all([
@@ -424,23 +466,49 @@ export function App() {
   async function handleSaveProviderSettings() {
     setError(null);
     setNotice(null);
-    const response = await runPending("provider-settings", () =>
-      saveProviderSettings({
+    const summary = await runPending("provider-settings", () =>
+      saveProviderRegistrySettings({
         registryUrl: providerSettingsForm.registryUrl.trim() || null,
         selectedProviderProfileKey: providerSettingsForm.selectedProviderProfileKey.trim() || null,
         demoProviderMode: providerSettingsForm.demoProviderMode
       })
     );
-    setProviderSettings(response.settings);
-    setProviderReadiness(response.readiness);
+    applySettingsSummary(summary);
+    setProviderReadiness(await getProviderReadiness());
     setSuggestionReadiness(await getProviderReadinessForTask(suggestComponentRevisionTaskKey));
-    setProviderSettingsForm({
-      registryUrl: response.settings.registryUrl,
-      selectedProviderProfileKey: response.settings.selectedProviderProfileKey,
-      demoProviderMode: response.settings.demoProviderMode
-    });
+    setInlineAiSuggestActions((await getRenderSlotActions(inlineAiSuggestSlot)).actions);
     await refreshGlobal();
     setNotice("Provider settings saved.");
+  }
+
+  async function handleRefreshProviders() {
+    setError(null);
+    setNotice(null);
+    await runPending("provider-refresh", refreshGlobal);
+    setNotice("Provider readiness refreshed.");
+  }
+
+  async function handleSaveTaskRoute(taskKey: string) {
+    const draft = taskRouteDrafts[taskKey];
+    if (!draft) {
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    const payload: TaskRouteSaveRequest = {
+      providerKey: draft.providerKey.trim() || null,
+      renderSlot: draft.renderSlot.trim(),
+      hookKey: draft.hookKey.trim(),
+      displayOrder: Number(draft.displayOrder || 0),
+      enabled: draft.enabled,
+      modelOverride: draft.modelOverride.trim() || null,
+      displayLabel: draft.displayLabel.trim() || null,
+      displayDescription: draft.displayDescription.trim() || null
+    };
+    await runPending("task-route", () => saveTaskRoute(taskKey, payload));
+    await refreshGlobal();
+    setNotice(`Saved route for ${taskKey}.`);
   }
 
   async function handleFileIngest() {
@@ -627,13 +695,13 @@ export function App() {
   }
 
   async function handleSuggestComponentRevision() {
-    if (!selectedComponent || !selectedDocumentId) {
+    if (!selectedComponent || !selectedDocumentId || !aiSuggestAction) {
       return;
     }
 
     setError(null);
-    const response = await runPending("ai-suggest", () => suggestComponentRevision(selectedComponent.id));
-    setSuggestionReadiness({ ...response.readiness, taskKey: suggestComponentRevisionTaskKey });
+    const response = await runPending("ai-suggest", () => suggestComponentRevision(selectedComponent.id, aiSuggestAction.taskKey));
+    setSuggestionReadiness({ ...response.readiness, taskKey: aiSuggestAction.taskKey });
     setTaskRunsById((current) => ({ ...current, [response.taskRun.id]: response.taskRun }));
     await refreshDetail(selectedDocumentId);
     setSelectedInlineTab("ai");
@@ -739,10 +807,14 @@ export function App() {
     });
   }
 
-  const pageName = activePage === "review" ? "Document Review" : "Admin / Setup";
+  const aiSuggestAction =
+    inlineAiSuggestActions.find((action) => action.taskKey === suggestComponentRevisionTaskKey) ??
+    inlineAiSuggestActions[0] ??
+    null;
+  const pageName = activePage === "review" ? "Document Review" : "Settings";
 
   return (
-    <div className={`app-shell ${activePage === "review" ? "review-page-shell" : "admin-page-shell"} ${reviewViewMode === "focus" ? "focus-mode" : ""}`}>
+    <div className={`app-shell ${activePage === "review" ? "review-page-shell" : "settings-page-shell"} ${reviewViewMode === "focus" ? "focus-mode" : ""}`}>
       <header className="primary-nav">
         <div className="primary-nav-left">
           <div className="brand-block">
@@ -761,11 +833,11 @@ export function App() {
               Document Review
             </button>
             <button
-              className={activePage === "admin" ? "nav-tab active" : "nav-tab"}
+              className={activePage === "settings" ? "nav-tab active" : "nav-tab"}
               type="button"
-              onClick={() => setActivePage("admin")}
+              onClick={() => setActivePage("settings")}
             >
-              Admin / Setup
+              Settings
             </button>
           </nav>
         </div>
@@ -848,9 +920,9 @@ export function App() {
             {!workflowStatus?.active ? (
               <section className="compact-blocker">
                 <strong>Workflow is inactive.</strong>
-                <span>Review can continue for existing documents, but ingest is handled from Admin / Setup after activation.</span>
-                <button className="btn btn-secondary" type="button" onClick={() => setActivePage("admin")}>
-                  Open Admin / Setup
+                <span>Review can continue for existing documents, but ingest is handled from Settings after activation.</span>
+                <button className="btn btn-secondary" type="button" onClick={() => setActivePage("settings")}>
+                  Open Settings
                 </button>
               </section>
             ) : null}
@@ -1065,6 +1137,7 @@ export function App() {
                                   reviewNoteForm={reviewNoteForm}
                                   selectedDraftChanged={selectedDraftChanged}
                                   suggestionInvocation={suggestionInvocation}
+                                  suggestionAction={aiSuggestAction}
                                   suggestionReadiness={suggestionReadiness}
                                   suggestionReady={suggestionReady}
                                   suggestions={suggestionsForComponent}
@@ -1104,18 +1177,136 @@ export function App() {
           </main>
         </>
       ) : (
-        <main className="admin-workspace">
-          <section className="admin-panel">
+        <SettingsWorkspace
+          fileForm={fileForm}
+          ingestBlocked={ingestBlocked}
+          isPending={isPending}
+          onActivateWorkflow={handleActivateWorkflow}
+          onChangeFileForm={setFileForm}
+          onChangeProviderSettingsForm={setProviderSettingsForm}
+          onChangeSection={setSettingsSection}
+          onChangeTaskRouteDrafts={setTaskRouteDrafts}
+          onChangeUrlForm={setUrlForm}
+          onFileIngest={handleFileIngest}
+          onProviderRefresh={handleRefreshProviders}
+          onSaveProviderSettings={handleSaveProviderSettings}
+          onSaveTaskRoute={handleSaveTaskRoute}
+          onSelectedFile={handleSelectedFile}
+          onUrlIngest={handleUrlIngest}
+          onValidateWorkflow={handleValidateWorkflow}
+          providerReadiness={providerReadiness}
+          providerSettings={providerSettings}
+          providerSettingsForm={providerSettingsForm}
+          reportActionError={reportActionError}
+          section={settingsSection}
+          settingsSummary={settingsSummary}
+          setupReadiness={setupReadiness}
+          taskRouteDrafts={taskRouteDrafts}
+          urlForm={urlForm}
+          workflowStatus={workflowStatus}
+          workflowValidation={workflowValidation}
+        />
+      )}
+    </div>
+  );
+}
+
+function SettingsWorkspace({
+  fileForm,
+  ingestBlocked,
+  isPending,
+  onActivateWorkflow,
+  onChangeFileForm,
+  onChangeProviderSettingsForm,
+  onChangeSection,
+  onChangeTaskRouteDrafts,
+  onChangeUrlForm,
+  onFileIngest,
+  onProviderRefresh,
+  onSaveProviderSettings,
+  onSaveTaskRoute,
+  onSelectedFile,
+  onUrlIngest,
+  onValidateWorkflow,
+  providerReadiness,
+  providerSettings,
+  providerSettingsForm,
+  reportActionError,
+  section,
+  settingsSummary,
+  setupReadiness,
+  taskRouteDrafts,
+  urlForm,
+  workflowStatus,
+  workflowValidation
+}: {
+  fileForm: FileForm;
+  ingestBlocked: boolean;
+  isPending: (key: PendingKey) => boolean;
+  onActivateWorkflow: () => Promise<void>;
+  onChangeFileForm: Dispatch<SetStateAction<FileForm>>;
+  onChangeProviderSettingsForm: Dispatch<SetStateAction<ProviderSettingsForm>>;
+  onChangeSection: (section: SettingsSection) => void;
+  onChangeTaskRouteDrafts: Dispatch<SetStateAction<Record<string, TaskRouteDraft>>>;
+  onChangeUrlForm: Dispatch<SetStateAction<UrlForm>>;
+  onFileIngest: () => Promise<void>;
+  onProviderRefresh: () => Promise<void>;
+  onSaveProviderSettings: () => Promise<void>;
+  onSaveTaskRoute: (taskKey: string) => Promise<void>;
+  onSelectedFile: (file: File | null) => Promise<void>;
+  onUrlIngest: () => Promise<void>;
+  onValidateWorkflow: () => Promise<void>;
+  providerReadiness: ProviderReadiness | null;
+  providerSettings: ProviderSettings | null;
+  providerSettingsForm: ProviderSettingsForm;
+  reportActionError: (action: () => Promise<unknown>) => void;
+  section: SettingsSection;
+  settingsSummary: SettingsSummary | null;
+  setupReadiness: SetupReadiness | null;
+  taskRouteDrafts: Record<string, TaskRouteDraft>;
+  urlForm: UrlForm;
+  workflowStatus: WorkflowStatus | null;
+  workflowValidation: WorkflowValidationResult | null;
+}) {
+  const sections: { id: SettingsSection; label: string; status?: string }[] = [
+    { id: "workflow", label: "Workflow", status: workflowStatus?.active ? "Active" : "Blocked" },
+    { id: "provider", label: "Provider Registry", status: providerSettingsForm.demoProviderMode ? "Demo" : providerSettings?.sources.registryUrl },
+    { id: "tasks", label: "AI Tasks", status: `${settingsSummary?.taskRoutes.length ?? 0}` },
+    { id: "landing", label: "Landing Areas", status: `${settingsSummary?.renderSlots.length ?? 0}` },
+    { id: "diagnostics", label: "Diagnostics", status: providerReadiness?.ready ? "Ready" : "Check" },
+    { id: "ingest", label: "Ingest", status: ingestBlocked ? "Blocked" : "Ready" }
+  ];
+
+  return (
+    <main className="settings-workspace">
+      <aside className="settings-nav" aria-label="Settings sections">
+        <div className="sidebar-label">Settings</div>
+        {sections.map((item) => (
+          <button
+            className={item.id === section ? "settings-nav-item active" : "settings-nav-item"}
+            key={item.id}
+            type="button"
+            onClick={() => onChangeSection(item.id)}
+          >
+            <span>{item.label}</span>
+            {item.status ? <small>{item.status}</small> : null}
+          </button>
+        ))}
+      </aside>
+
+      <section className="settings-detail">
+        {section === "workflow" ? (
+          <div className="settings-panel">
             <div className="panel-heading">
               <div>
-                <h2>Workflow Setup</h2>
+                <h2>Workflow</h2>
                 <p>Validate the bundled document workflow, then import and activate it before ingesting documents.</p>
               </div>
               <div className="setup-actions">
-                <button className="btn btn-secondary" disabled={isPending("workflow-validate")} type="button" onClick={() => reportActionError(handleValidateWorkflow)}>
+                <button className="btn btn-secondary" disabled={isPending("workflow-validate")} type="button" onClick={() => reportActionError(onValidateWorkflow)}>
                   {isPending("workflow-validate") ? "Validating" : "Validate Fixture"}
                 </button>
-                <button className="btn btn-primary" disabled={isPending("workflow-activate")} type="button" onClick={() => reportActionError(handleActivateWorkflow)}>
+                <button className="btn btn-primary" disabled={isPending("workflow-activate")} type="button" onClick={() => reportActionError(onActivateWorkflow)}>
                   {isPending("workflow-activate") ? "Activating" : "Import And Activate"}
                 </button>
               </div>
@@ -1144,39 +1335,25 @@ export function App() {
                 </div>
               ) : null}
             </div>
-          </section>
+          </div>
+        ) : null}
 
-          <section className="admin-panel">
+        {section === "provider" ? (
+          <div className="settings-panel">
             <div className="panel-heading">
               <div>
-                <h2>Readiness</h2>
-                <p>Setup and provider checks determine whether provider-backed review actions can run.</p>
+                <h2>Provider Registry</h2>
+                <p>Configure durable provider runtime defaults and refresh provider readiness.</p>
               </div>
-            </div>
-            <div className="admin-two-column">
-              <div>
-                <h3>Setup</h3>
-                <ReadinessGrid checks={setupReadiness?.checks ?? []} />
-              </div>
-              <div>
-                <h3>Providers</h3>
-                <ReadinessGrid checks={providerReadiness?.checks ?? []} />
-              </div>
-            </div>
-          </section>
-
-          <section className="admin-panel">
-            <div className="panel-heading">
-              <div>
-                <h2>Provider Settings</h2>
-                <p>Configure durable provider runtime defaults for this app.</p>
-              </div>
+              <button className="btn btn-secondary" disabled={isPending("provider-refresh")} type="button" onClick={() => reportActionError(onProviderRefresh)}>
+                {isPending("provider-refresh") ? "Refreshing" : "Refresh Providers"}
+              </button>
             </div>
             <form
               className="provider-settings-form"
               onSubmit={(event) => {
                 event.preventDefault();
-                reportActionError(handleSaveProviderSettings);
+                reportActionError(onSaveProviderSettings);
               }}
             >
               <label>
@@ -1184,7 +1361,7 @@ export function App() {
                 <input
                   value={providerSettingsForm.registryUrl}
                   onChange={(event) =>
-                    setProviderSettingsForm((current) => ({ ...current, registryUrl: event.target.value }))
+                    onChangeProviderSettingsForm((current) => ({ ...current, registryUrl: event.target.value }))
                   }
                   placeholder="http://127.0.0.1:5181"
                 />
@@ -1195,7 +1372,7 @@ export function App() {
                 <input
                   value={providerSettingsForm.selectedProviderProfileKey}
                   onChange={(event) =>
-                    setProviderSettingsForm((current) => ({
+                    onChangeProviderSettingsForm((current) => ({
                       ...current,
                       selectedProviderProfileKey: event.target.value
                     }))
@@ -1209,7 +1386,7 @@ export function App() {
                   checked={providerSettingsForm.demoProviderMode}
                   type="checkbox"
                   onChange={(event) =>
-                    setProviderSettingsForm((current) => ({ ...current, demoProviderMode: event.target.checked }))
+                    onChangeProviderSettingsForm((current) => ({ ...current, demoProviderMode: event.target.checked }))
                   }
                 />
                 Demo mode
@@ -1232,9 +1409,164 @@ export function App() {
                 <strong>{providerSettingsForm.demoProviderMode ? "Enabled" : "Disabled"}</strong>
               </div>
             </div>
-          </section>
+            <ReadinessGrid checks={providerReadiness?.checks ?? []} />
+          </div>
+        ) : null}
 
-          <section className="admin-panel ingest-panel" aria-disabled={ingestBlocked}>
+        {section === "tasks" ? (
+          <div className="settings-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>AI Tasks</h2>
+                <p>Edit provider task routing, slot placement, order, enabled state, and model override.</p>
+              </div>
+            </div>
+            <div className="task-route-list">
+              {(settingsSummary?.taskRoutes ?? []).map((route) => {
+                const draft = taskRouteDrafts[route.taskKey] ?? taskRouteToDraft(route);
+                return (
+                  <form
+                    className="task-route-card"
+                    key={route.taskKey}
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      reportActionError(() => onSaveTaskRoute(route.taskKey));
+                    }}
+                  >
+                    <div className="task-route-heading">
+                      <div>
+                        <strong>{route.displayName}</strong>
+                        <small>{route.taskKey}</small>
+                      </div>
+                      <StatusPill
+                        item={{
+                          key: route.taskKey,
+                          label: route.enabled ? "Enabled" : "Disabled",
+                          ready: route.enabled && route.hookReady,
+                          reason: route.hookReady ? undefined : `Hook ${route.hookKey} is not implemented.`
+                        }}
+                      />
+                    </div>
+                    <div className="task-route-grid">
+                      <label>
+                        Provider key
+                        <input
+                          value={draft.providerKey}
+                          placeholder="Profile capability default"
+                          onChange={(event) => updateTaskRouteDraft(onChangeTaskRouteDrafts, route.taskKey, { providerKey: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        Render slot
+                        <select
+                          value={draft.renderSlot}
+                          onChange={(event) => updateTaskRouteDraft(onChangeTaskRouteDrafts, route.taskKey, { renderSlot: event.target.value })}
+                        >
+                          {(settingsSummary?.renderSlots ?? []).map((slot) => (
+                            <option key={slot.slot} value={slot.slot}>
+                              {slot.slot}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Hook
+                        <input
+                          value={draft.hookKey}
+                          onChange={(event) => updateTaskRouteDraft(onChangeTaskRouteDrafts, route.taskKey, { hookKey: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        Order
+                        <input
+                          inputMode="numeric"
+                          value={draft.displayOrder}
+                          onChange={(event) => updateTaskRouteDraft(onChangeTaskRouteDrafts, route.taskKey, { displayOrder: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        Model override
+                        <input
+                          value={draft.modelOverride}
+                          placeholder="Optional"
+                          onChange={(event) => updateTaskRouteDraft(onChangeTaskRouteDrafts, route.taskKey, { modelOverride: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        Display label
+                        <input
+                          value={draft.displayLabel}
+                          onChange={(event) => updateTaskRouteDraft(onChangeTaskRouteDrafts, route.taskKey, { displayLabel: event.target.value })}
+                        />
+                      </label>
+                      <label className="full-span">
+                        Description
+                        <input
+                          value={draft.displayDescription}
+                          onChange={(event) => updateTaskRouteDraft(onChangeTaskRouteDrafts, route.taskKey, { displayDescription: event.target.value })}
+                        />
+                      </label>
+                    </div>
+                    <div className="inline-actions">
+                      <label className="inline-check">
+                        <input
+                          checked={draft.enabled}
+                          type="checkbox"
+                          onChange={(event) => updateTaskRouteDraft(onChangeTaskRouteDrafts, route.taskKey, { enabled: event.target.checked })}
+                        />
+                        Enabled
+                      </label>
+                      <button className="btn btn-primary" disabled={isPending("task-route")} type="submit">
+                        {isPending("task-route") ? "Saving" : "Save Route"}
+                      </button>
+                    </div>
+                  </form>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {section === "landing" ? (
+          <div className="settings-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Landing Areas</h2>
+                <p>Predefined render slots and their current task assignments.</p>
+              </div>
+            </div>
+            <div className="render-slot-list">
+              {(settingsSummary?.renderSlots ?? []).map((slot) => (
+                <RenderSlotRow key={slot.slot} slot={slot} />
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {section === "diagnostics" ? (
+          <div className="settings-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Diagnostics</h2>
+                <p>Provider readiness, hook readiness, task readiness, and recent task runs.</p>
+              </div>
+            </div>
+            <div className="admin-two-column">
+              <div>
+                <h3>Setup</h3>
+                <ReadinessGrid checks={setupReadiness?.checks ?? []} />
+              </div>
+              <div>
+                <h3>Providers</h3>
+                <ReadinessGrid checks={providerReadiness?.checks ?? []} />
+              </div>
+            </div>
+            <TaskRunTable taskRuns={settingsSummary?.taskRuns ?? []} />
+          </div>
+        ) : null}
+
+        {section === "ingest" ? (
+          <div className="settings-panel ingest-panel" aria-disabled={ingestBlocked}>
             <div className="panel-heading">
               <div>
                 <h2>Ingest</h2>
@@ -1256,7 +1588,7 @@ export function App() {
                 className="ingest-form"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  reportActionError(handleFileIngest);
+                  reportActionError(onFileIngest);
                 }}
               >
                 <label>
@@ -1265,7 +1597,7 @@ export function App() {
                     accept=".txt,.md,.html,.htm,text/plain,text/markdown,text/html"
                     disabled={ingestBlocked || isPending("file-read")}
                     type="file"
-                    onChange={(event) => reportActionError(() => handleSelectedFile(event.currentTarget.files?.[0] ?? null))}
+                    onChange={(event) => reportActionError(() => onSelectedFile(event.currentTarget.files?.[0] ?? null))}
                   />
                 </label>
                 <label>
@@ -1273,7 +1605,7 @@ export function App() {
                   <input
                     disabled={ingestBlocked}
                     value={fileForm.name}
-                    onChange={(event) => setFileForm((current) => ({ ...current, name: event.target.value }))}
+                    onChange={(event) => onChangeFileForm((current) => ({ ...current, name: event.target.value }))}
                   />
                 </label>
                 <label>
@@ -1282,7 +1614,7 @@ export function App() {
                     disabled={ingestBlocked}
                     value={fileForm.format}
                     onChange={(event) =>
-                      setFileForm((current) => ({
+                      onChangeFileForm((current) => ({
                         ...current,
                         format: event.target.value as FileForm["format"]
                       }))
@@ -1300,7 +1632,7 @@ export function App() {
                     disabled={ingestBlocked}
                     rows={6}
                     value={fileForm.content}
-                    onChange={(event) => setFileForm((current) => ({ ...current, content: event.target.value }))}
+                    onChange={(event) => onChangeFileForm((current) => ({ ...current, content: event.target.value }))}
                   />
                 </label>
                 <button className="btn btn-primary" disabled={ingestBlocked || isPending("file-ingest")} type="submit">
@@ -1312,7 +1644,7 @@ export function App() {
                 className="ingest-form"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  reportActionError(handleUrlIngest);
+                  reportActionError(onUrlIngest);
                 }}
               >
                 <label>
@@ -1321,7 +1653,7 @@ export function App() {
                     disabled={ingestBlocked}
                     placeholder="https://example.com"
                     value={urlForm.url}
-                    onChange={(event) => setUrlForm((current) => ({ ...current, url: event.target.value }))}
+                    onChange={(event) => onChangeUrlForm((current) => ({ ...current, url: event.target.value }))}
                   />
                 </label>
                 <label>
@@ -1330,7 +1662,7 @@ export function App() {
                     disabled={ingestBlocked}
                     placeholder="Optional"
                     value={urlForm.name}
-                    onChange={(event) => setUrlForm((current) => ({ ...current, name: event.target.value }))}
+                    onChange={(event) => onChangeUrlForm((current) => ({ ...current, name: event.target.value }))}
                   />
                 </label>
                 <label className="full-span">
@@ -1340,7 +1672,7 @@ export function App() {
                     rows={6}
                     placeholder="Optional captured HTML. Leave blank to fetch the URL."
                     value={urlForm.snapshotHtml}
-                    onChange={(event) => setUrlForm((current) => ({ ...current, snapshotHtml: event.target.value }))}
+                    onChange={(event) => onChangeUrlForm((current) => ({ ...current, snapshotHtml: event.target.value }))}
                   />
                 </label>
                 <button className="btn btn-primary" disabled={ingestBlocked || !urlForm.url.trim() || isPending("url-ingest")} type="submit">
@@ -1348,9 +1680,55 @@ export function App() {
                 </button>
               </form>
             </div>
-          </section>
-        </main>
-      )}
+          </div>
+        ) : null}
+      </section>
+    </main>
+  );
+}
+
+function RenderSlotRow({ slot }: { slot: RenderSlotSummary }) {
+  return (
+    <article className="render-slot-row">
+      <div>
+        <strong>{slot.label}</strong>
+        <span>{slot.slot}</span>
+        <p>{slot.description}</p>
+      </div>
+      <div className="render-slot-metrics">
+        <span>{slot.actionCount} actions</span>
+        <span>{slot.readyActionCount} ready</span>
+      </div>
+      <div className="render-slot-tasks">
+        {slot.taskKeys.length === 0 ? <small>No assigned tasks</small> : slot.taskKeys.map((taskKey) => <small key={taskKey}>{taskKey}</small>)}
+      </div>
+    </article>
+  );
+}
+
+function TaskRunTable({ taskRuns }: { taskRuns: TaskRun[] }) {
+  if (taskRuns.length === 0) {
+    return <div className="empty-state">No task runs recorded yet.</div>;
+  }
+
+  return (
+    <div className="task-run-table" role="table" aria-label="Recent task runs">
+      <div className="task-run-row header" role="row">
+        <span>Task</span>
+        <span>Status</span>
+        <span>Provider</span>
+        <span>Validation</span>
+        <span>Created</span>
+      </div>
+      {taskRuns.map((taskRun) => (
+        <div className="task-run-row" role="row" key={taskRun.id}>
+          <span>{taskRun.taskKey}</span>
+          <span>{taskRun.status}</span>
+          <span>{taskRun.providerKey ?? "Not recorded"}</span>
+          <span>{taskRun.validationStatus ?? "Not recorded"}</span>
+          <span>{formatDateTime(taskRun.createdAt)}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1380,6 +1758,7 @@ function InlineReviewPanel({
   reviewNoteForm,
   selectedDraftChanged,
   suggestionInvocation,
+  suggestionAction,
   suggestionReadiness,
   suggestionReady,
   suggestions,
@@ -1409,6 +1788,7 @@ function InlineReviewPanel({
   reviewNoteForm: ReviewNoteForm;
   selectedDraftChanged: boolean;
   suggestionInvocation: ProviderReadiness["invocation"] | null;
+  suggestionAction: RenderSlotAction | null;
   suggestionReadiness: (ProviderReadiness & { taskKey: string }) | null;
   suggestionReady: boolean;
   suggestions: DocumentDetail["review"]["aiSuggestions"];
@@ -1526,12 +1906,16 @@ function InlineReviewPanel({
             />
             <button
               className="btn btn-secondary"
-              disabled={!suggestionReady || isPending("ai-suggest")}
-              title={suggestionReady ? "Create a proposed AI suggestion" : providerBlocker(suggestionReadiness)}
+              disabled={!suggestionAction || !suggestionAction.ready || !suggestionReady || isPending("ai-suggest")}
+              title={
+                suggestionAction?.ready && suggestionReady
+                  ? "Create a proposed AI suggestion"
+                  : renderSlotActionBlocker(suggestionAction) ?? providerBlocker(suggestionReadiness)
+              }
               type="button"
               onClick={() => reportActionError(onSuggest)}
             >
-              {isPending("ai-suggest") ? "Suggesting" : "AI Suggest"}
+              {isPending("ai-suggest") ? "Suggesting" : suggestionAction?.displayName ?? "AI Suggest"}
             </button>
           </div>
           <InvocationSummary readiness={suggestionReadiness} summary={suggestionInvocation} />
@@ -1830,6 +2214,52 @@ function providerBlocker(readiness: ProviderReadiness | null) {
   }
 
   return readiness.checks.find((check) => !check.ready)?.reason ?? "Provider readiness is blocked.";
+}
+
+function renderSlotActionBlocker(action: RenderSlotAction | null) {
+  if (!action) {
+    return "No task action is assigned to this landing area.";
+  }
+  if (action.ready) {
+    return undefined;
+  }
+  return action.reasons[0]?.message ?? "Task action readiness is blocked.";
+}
+
+function taskRouteToDraft(route: TaskRouteSummary): TaskRouteDraft {
+  return {
+    providerKey: route.providerKey ?? "",
+    renderSlot: route.renderSlot,
+    hookKey: route.hookKey,
+    displayOrder: String(route.displayOrder),
+    enabled: route.enabled,
+    modelOverride: route.modelOverride ?? "",
+    displayLabel: route.displayName,
+    displayDescription: route.description ?? ""
+  };
+}
+
+function updateTaskRouteDraft(
+  setDrafts: Dispatch<SetStateAction<Record<string, TaskRouteDraft>>>,
+  taskKey: string,
+  patch: Partial<TaskRouteDraft>
+) {
+  setDrafts((current) => ({
+    ...current,
+    [taskKey]: {
+      ...(current[taskKey] ?? {
+        providerKey: "",
+        renderSlot: "",
+        hookKey: "",
+        displayOrder: "0",
+        enabled: true,
+        modelOverride: "",
+        displayLabel: "",
+        displayDescription: ""
+      }),
+      ...patch
+    }
+  }));
 }
 
 function settingSourceLabel(source: ProviderSettings["sources"]["registryUrl"] | undefined) {

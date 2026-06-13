@@ -516,19 +516,20 @@ function buildTaskDefinition(taskAsset: ProviderTaskAsset, provider: ProviderCon
   const prompt = readPromptObject(taskAsset.prompt);
   return {
     taskKey: taskAsset.taskKey,
-    displayName: readString(prompt.name) ?? taskAsset.taskKey,
+    displayName: taskAsset.displayLabel ?? readString(prompt.name) ?? taskAsset.taskKey,
     hookKey: taskAsset.hookKey,
     renderSlot: taskAsset.renderSlot,
-    displayOrder: 0,
+    displayOrder: taskAsset.displayOrder,
     selectedProviderKey: provider?.providerKey ?? taskAsset.providerKey ?? undefined,
     requiredCapability: taskAsset.requiredCapability as TaskDefinition["requiredCapability"],
+    modelOverride: taskAsset.modelOverride ?? undefined,
     prompt: {
       systemInstructions: readString(prompt.systemInstructions),
       userInstructions: readString(prompt.userInstructions),
       structuredOutputSchema: taskAsset.schema ?? undefined,
       promptVersion: taskAsset.promptVersion
     },
-    enabled: true,
+    enabled: taskAsset.enabled,
     requiredRuntimeKeys: [localRuntimeKey]
   };
 }

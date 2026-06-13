@@ -10,9 +10,9 @@ As of 2026-06-13:
 - `npm audit --json` reports zero vulnerabilities.
 - `npm run verify` passes.
 - `cargo check --offline` passes for the Tauri app after adding `src-tauri/icons/icon.png`.
-- Chrome smoke against `http://127.0.0.1:5184/` passes with the expected setup/provider/workflow blockers visible, ingest and export disabled, and no Chrome console errors.
+- Chrome smoke against `http://127.0.0.1:5184/` passes with the expected Settings/provider/workflow blockers visible, predefined landing areas listed, ingest disabled without an active workflow, desktop layout without horizontal overflow, and no Chrome console errors.
 - `npm run tauri:dev` launches the macOS desktop shell; the desktop-launched service reports healthy at `http://127.0.0.1:4794/health`.
-- Current automated tests: parser stability and source ranges, provider readiness policy, migration-file loading, repository mapping/query behavior, workflow HTTP endpoints, `txt`/`md`/`html`/`htm` file ingest HTTP behavior, URL snapshot ingest HTTP behavior, review mutation HTTP behavior, autosave snapshot creation, and save-to-version promotion.
+- Current automated tests: parser stability and source ranges, provider readiness policy, migration-file loading, repository mapping/query behavior, task-route mapping/update behavior, Settings HTTP endpoints, render-slot listing, task-run diagnostics listing, workflow HTTP endpoints, `txt`/`md`/`html`/`htm` file ingest HTTP behavior, URL snapshot ingest HTTP behavior, review mutation HTTP behavior, autosave snapshot creation, and save-to-version promotion.
 - `npm run dev:service` starts the service on `127.0.0.1:4794` when allowed to bind local IPC/ports.
 - `/health` returns liveness; `/ready` and `/api/setup-readiness` return expected setup blockers when env is not configured.
 
@@ -56,8 +56,11 @@ Use manual checks only after the implementation slice has automated coverage:
    - local service starts on `127.0.0.1:4794`
    - UI starts on `http://127.0.0.1:5184`
    - setup readiness shows database, workflow, and provider blockers clearly
+   - Settings shows Workflow, Provider Registry, AI Tasks, Landing Areas, Diagnostics, and Ingest sections
+   - predefined landing areas show current task assignments or clear empty assignment state
    - document import surface blocks clearly when no active workflow exists
    - provider-backed buttons are disabled with concrete readiness reasons
+   - desktop layout has no horizontal overflow; narrow viewport should be checked when Chrome automation supports resizing or by a manual resize
    - Chrome console has no errors
 2. macOS desktop smoke:
    - Tauri shell starts through `npm run tauri:dev`

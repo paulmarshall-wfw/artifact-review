@@ -61,6 +61,71 @@ export type ProviderSettingsSaveResponse = {
   readiness: ProviderReadiness;
 };
 
+export type ProviderRegistrySettings = ProviderSettings;
+
+export type TaskRouteSummary = {
+  taskKey: string;
+  displayName: string;
+  description: string | null;
+  providerKey: string | null;
+  requiredCapability: string;
+  promptVersion: string;
+  renderSlot: string;
+  hookKey: string;
+  displayOrder: number;
+  enabled: boolean;
+  modelOverride: string | null;
+  hookImplementationKey: string | null;
+  hookReady: boolean;
+};
+
+export type RenderSlotSummary = {
+  slot: string;
+  label: string;
+  description: string;
+  actionCount: number;
+  readyActionCount: number;
+  taskKeys: string[];
+};
+
+export type RenderSlotAction = {
+  taskKey: string;
+  displayName: string;
+  slot: string;
+  displayOrder: number;
+  enabled: boolean;
+  ready: boolean;
+  reasons: { code: string; message: string }[];
+};
+
+export type TaskRunSummary = TaskRun;
+
+export type SettingsSummary = {
+  providerRegistry: ProviderRegistrySettings;
+  workflow: WorkflowStatus;
+  readiness: ReadinessResponse;
+  taskRoutes: TaskRouteSummary[];
+  renderSlots: RenderSlotSummary[];
+  taskRuns: TaskRunSummary[];
+};
+
+export type TaskRouteSaveRequest = {
+  providerKey?: string | null;
+  renderSlot?: string;
+  hookKey?: string;
+  displayOrder?: number;
+  enabled?: boolean;
+  modelOverride?: string | null;
+  displayLabel?: string | null;
+  displayDescription?: string | null;
+};
+
+export type TaskRouteSaveResponse = {
+  route: TaskRouteSummary;
+  readiness: ProviderReadiness;
+  actions: RenderSlotAction[];
+};
+
 export type WorkflowState = {
   id: string;
   visible: boolean;
@@ -412,6 +477,56 @@ export async function saveProviderSettings(payload: ProviderSettingsSaveRequest)
   });
 }
 
+export async function getSettingsSummary(): Promise<SettingsSummary> {
+  return requestJson<SettingsSummary>("/api/settings");
+}
+
+export async function saveProviderRegistrySettings(payload: ProviderSettingsSaveRequest): Promise<SettingsSummary> {
+  return requestJson<SettingsSummary>("/api/settings/provider-registry", {
+    method: "PATCH",
+    ...jsonBody(payload)
+  });
+}
+
+export async function refreshProviders(): Promise<{
+  settings: ProviderRegistrySettings;
+  readiness: ProviderReadiness;
+  summary: SettingsSummary;
+}> {
+  return requestJson<{
+    settings: ProviderRegistrySettings;
+    readiness: ProviderReadiness;
+    summary: SettingsSummary;
+  }>("/api/settings/providers/refresh", {
+    method: "POST"
+  });
+}
+
+export async function getSettingsReadiness(): Promise<ReadinessResponse> {
+  return requestJson<ReadinessResponse>("/api/settings/readiness");
+}
+
+export async function getRenderSlots(): Promise<{ renderSlots: RenderSlotSummary[] }> {
+  return requestJson<{ renderSlots: RenderSlotSummary[] }>("/api/settings/render-slots");
+}
+
+export async function getRenderSlotActions(slot: string): Promise<{ slot: string; actions: RenderSlotAction[] }> {
+  return requestJson<{ slot: string; actions: RenderSlotAction[] }>(
+    `/api/settings/render-slots/${encodeURIComponent(slot)}/actions`
+  );
+}
+
+export async function getSettingsTaskRuns(): Promise<{ taskRuns: TaskRunSummary[] }> {
+  return requestJson<{ taskRuns: TaskRunSummary[] }>("/api/settings/task-runs");
+}
+
+export async function saveTaskRoute(taskKey: string, payload: TaskRouteSaveRequest): Promise<TaskRouteSaveResponse> {
+  return requestJson<TaskRouteSaveResponse>(`/api/settings/tasks/${encodeURIComponent(taskKey)}/route`, {
+    method: "PATCH",
+    ...jsonBody(payload)
+  });
+}
+
 export async function getProviderReadinessForTask(taskKey: string): Promise<ProviderReadiness & { taskKey: string }> {
   return requestJson<ProviderReadiness & { taskKey: string }>(`/api/provider-readiness/tasks/${encodeURIComponent(taskKey)}`);
 }
@@ -552,9 +667,12 @@ export async function exportDocument(
   });
 }
 
-export async function suggestComponentRevision(componentId: string): Promise<SuggestComponentRevisionResponse> {
+export async function suggestComponentRevision(
+  componentId: string,
+  taskKey = "suggest-component-revision"
+): Promise<SuggestComponentRevisionResponse> {
   return requestJson<SuggestComponentRevisionResponse>(
-    `/api/components/${encodeURIComponent(componentId)}/ai-suggestions`,
+    `/api/components/${encodeURIComponent(componentId)}/task-actions/${encodeURIComponent(taskKey)}`,
     {
       method: "POST"
     }

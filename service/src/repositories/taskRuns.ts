@@ -122,6 +122,22 @@ export class TaskRunsRepository {
     );
     return result.rows[0] ? mapTaskRun(result.rows[0]) : null;
   }
+
+  async listTaskRuns(limit = 25): Promise<TaskRun[]> {
+    const safeLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
+    const result = await this.db.query<TaskRunRow>(
+      `
+        select
+          id, task_key, provider_key, provider_profile_key, prompt_version, status,
+          validation_status, external_send, latency_ms, provenance, created_at
+        from task_runs
+        order by created_at desc
+        limit $1
+      `,
+      [safeLimit]
+    );
+    return result.rows.map(mapTaskRun);
+  }
 }
 
 function mapTaskRun(row: TaskRunRow): TaskRun {

@@ -7,6 +7,8 @@ Artifact Review stores app-owned domain state in Postgres through `DATABASE_URL`
 - `service/migrations/001_initial_schema.sql`
 - `service/migrations/002_review_and_provider_records.sql`
 - `service/migrations/003_provider_task_assets.sql`
+- `service/migrations/004_block_future_provider_task_hooks.sql`
+- `service/migrations/005_task_route_settings.sql`
 
 `service/src/db/migrations.ts` now loads numbered SQL files in lexical order, records applied checksums in `schema_migrations`, and applies unapplied migrations inside database transactions during service startup when `DATABASE_URL` is configured.
 
@@ -30,7 +32,7 @@ Artifact Review stores app-owned domain state in Postgres through `DATABASE_URL`
 | Table | Ownership |
 | --- | --- |
 | `app_settings` | App-specific settings such as selected provider profile key. |
-| `task_definitions` | App-owned provider-backed task configuration. |
+| `task_definitions` | App-owned provider-backed task configuration, including editable route metadata such as render slot, provider key, display order, enabled state, model override, and display labels. |
 | `prompt_versions` | Versioned app prompts for provider-backed tasks. |
 | `structured_output_schemas` | App-owned JSON schemas for provider outputs. |
 | `processing_hooks` | App-owned hook metadata and missing-hook policy. |
@@ -55,6 +57,8 @@ Artifact Review stores app-owned domain state in Postgres through `DATABASE_URL`
 - `draft-review-note` for component drawer note drafts.
 
 Each seeded task has a prompt version, structured output schema, render slot, and processing hook record. The `suggest-component-revision` hook stores proposed `ai_suggestions` only; accepting or rejecting suggestions is a separate user action.
+
+`004_block_future_provider_task_hooks.sql` marks seeded future hooks as unimplemented until their host behavior exists. `005_task_route_settings.sql` adds editable task-route metadata and seeds stable display labels/order for the MVP task buttons.
 
 ## Workflow Boundary
 

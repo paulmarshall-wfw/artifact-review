@@ -4,210 +4,130 @@
 
 - Project name: Artifact Review
 - Handoff type: implementation handoff
-- Updated timestamp UTC: 2026-06-13T05:12:25Z
+- Updated timestamp UTC: 2026-06-13T06:07:27Z
 - Prepared by: Codex
 - Repository, workspace, or folder: `/Users/paulmarshall/Software Development/artifact-review`
-- Branch or working context: Git branch `main`; current HEAD `9edb45a`
-- Session scope: provider registry integration compliance, local port reassignment, continuity documents, and the review/admin UI split.
+- Branch or working context: Git branch `main`; current HEAD `27a5964`
+- Session scope: Settings workspace reorganization, provider task route metadata, render-slot actions, diagnostics, and ingest gating.
 
 ### Checkpoint Status
 
-- Git HEAD: `9edb45a`
+- Git HEAD: `27a5964`
 - Working tree: dirty
 - Dirty files intentionally in scope:
-  - `.env.example`
-  - `AGENTS.md`
-  - `README.md`
   - `docs/api-contract.md`
   - `docs/completed-tasks.md`
-  - `docs/implementation-sequence.md`
+  - `docs/data-model.md`
   - `docs/setup-readiness.md`
   - `docs/verification-plan.md`
   - `handoff.md`
-  - `package.json`
-  - `service/src/config/env.ts`
   - `service/src/http/server.ts`
   - `service/src/providers/runtime.ts`
   - `service/src/repositories/providerTasks.ts`
-  - `src-tauri/src/lib.rs`
-  - `src-tauri/tauri.conf.json`
+  - `service/src/repositories/taskRuns.ts`
   - `src/App.tsx`
   - `src/lib/api.ts`
   - `src/styles.css`
+  - `tests/http-provider-settings.test.ts`
   - `tests/postgres.integration.test.ts`
   - `tests/provider-readiness.test.ts`
-  - `vite.config.ts`
-- Dirty files intentionally out of scope:
-  - None
+  - `tests/repositories.test.ts`
 - Untracked files intentionally in scope:
-  - `docs/artifact-review-provider-registry-integration-review-v2.md`
-  - `service/migrations/004_block_future_provider_task_hooks.sql`
-- Untracked files intentionally out of scope:
-  - `docs/design/artefact_review_ui.html`
-  - `docs/design/mockup-a-clean-panel.html`
-  - `docs/design/mockup-b-inline-annotations.html`
-  - `docs/design/mockup-c-split-editor.html`
-- Canonical files described:
-  - `AGENTS.md`
-  - `README.md`
-  - `docs/completed-tasks.md`
-  - `docs/setup-readiness.md`
-  - `docs/verification-plan.md`
-  - `/Users/paulmarshall/Software Development/All Standards/local-port-registry.md`
-- Last verification:
-  - command: `npm run verify`
-  - result: passed with 10 test files, 1 skipped Postgres suite, 43 tests passed, and 2 skipped; Vite production build passed
-  - timestamp UTC: 2026-06-13T05:12:25Z
-  - command: Chrome smoke on `http://127.0.0.1:5184/`
-  - result: partial pass; verified `Document Review` has no setup/provider/settings/ingest panels, `Admin / Setup` contains workflow/provider/settings/ingest controls, inactive workflow blocks ingest in Admin, and Focus mode hides review chrome. Document/component mutation flows were not exercised because no workflow activation or ingest was performed. Narrow viewport resizing was not available through the current Chrome automation surface.
-  - timestamp UTC: 2026-06-13T05:11:42Z
-  - command: `npm run verify`
-  - result: passed with 10 test files, 1 skipped Postgres suite, 43 tests passed, and 2 skipped; Vite production build passed
-  - timestamp UTC: 2026-06-13T04:31:01Z
-  - command: `python3 "/Users/paulmarshall/Software Development/All Standards/scripts/check-local-port-registry.py"`
-  - result: passed; existing unrelated conflicts in other projects remain reported
-  - timestamp UTC: 2026-06-13T04:31:00Z
-  - command: live port checks for `5184` and `4794`
-  - result: passed; no listeners found on either new Artifact Review port
-  - timestamp UTC: 2026-06-13T04:31:00Z
-- Handoff freshness: `fresh-to-dirty-tree`
-- Safe-to-continue basis: current HEAD, dirty files, untracked files, port reservations, and verification results are listed here; the remaining dirty tree is intentional.
-- Handoff helper status: `scripts/handoff_status.py` and `scripts/verify_handoff_freshness.py` are not present in this repo, so freshness was checked manually.
+  - `service/migrations/005_task_route_settings.sql`
+  - `service/src/settings/renderSlots.ts`
+- Dirty files intentionally out of scope: none observed
+- Untracked files intentionally out of scope: none observed
 - Next checkpoint action: leave dirty intentionally unless the user asks to commit.
 
 ## 2. Executive Summary
 
-Artifact Review now has the provider-registry integration hardening from `docs/artifact-review-provider-registry-integration-review-v2.md` and new reserved local ports.
+Artifact Review now has a Settings workspace instead of the flat `Admin / Setup` screen. Settings uses a left section navigator and focused detail panel for Workflow, Provider Registry, AI Tasks, Landing Areas, Diagnostics, and Ingest.
 
-Completed work history is tracked in `docs/completed-tasks.md`; do not duplicate it here.
+Implemented:
 
-Complete now:
+- Added service-backed Settings APIs:
+  - `GET /api/settings`
+  - `PATCH /api/settings/provider-registry`
+  - `POST /api/settings/providers/refresh`
+  - `GET /api/settings/readiness`
+  - `GET /api/settings/render-slots`
+  - `GET /api/settings/render-slots/:slot/actions`
+  - `GET /api/settings/task-runs`
+  - `PATCH /api/settings/tasks/:taskKey/route`
+- Added `POST /api/components/:componentId/task-actions/:taskKey` for slot-driven component inline task actions.
+- Kept `POST /api/components/:componentId/ai-suggestions` as compatibility path.
+- Added predefined render slots in `service/src/settings/renderSlots.ts`.
+- Added migration `005_task_route_settings.sql` for editable task route metadata: display order, enabled flag, model override, display label, and description.
+- Extended provider task repository and runtime mapping so `TargetAppRuntimeService` receives persisted route metadata.
+- Added Settings UI sections for workflow setup, provider registry, editable AI task routes, landing areas, diagnostics, and ingest.
+- Replaced hardcoded review-page AI Suggest button metadata with actions from `component.inline.aiSuggest`.
+- Preserved proposal-only AI output: suggestions are not applied until explicit accept.
+- Preserved hard ingest gate: ingest controls stay disabled until the backend reports an active workflow.
 
-- React is split into two top-level areas: `Document Review` for the document review/editor workspace and `Admin / Setup` for workflow activation, readiness, provider settings, and ingest.
-- The review page follows the document-centric mockup direction with workflow buckets, searchable document list, document toolbar, component stats/search, sectioned component canvas, inline component review tabs, and Normal/Focus modes.
-- The old right-side component detail drawer has been replaced by inline tabs for Text, Annotations, Questions, Evidence, and AI Suggestions.
-- Provider-backed action flow goes through a service-owned provider runtime facade instead of endpoint-specific provider plumbing.
-- Provider readiness is task-specific and includes invocation summaries such as selected provider/profile/adapter, prompt version, demo mode, and `externalSend`.
-- AI suggestions remain proposal-only until explicit accept/reject user action.
-- Future provider-backed task hooks are guarded by migration `004_block_future_provider_task_hooks.sql` and tests.
-- Local Artifact Review ports are reassigned and reserved: UI `127.0.0.1:5184`, service `127.0.0.1:4794`, Postgres shared dependency `localhost:5432`.
-- Root verification and the shared local port registry checker pass.
+Not done:
 
-Incomplete or not yet verified:
+- Database-backed Chrome smoke with active workflow, populated task routes, and sample ingested document was not run because this validation pass used no `DATABASE_URL`.
+- Narrow viewport Chrome validation could not be performed through the current Chrome automation backend; desktop overflow was checked.
+- macOS Tauri smoke was not rerun for this UI slice.
+- Windows smoke remains pending before any distribution work.
 
-- End-to-end document/component mutation smoke was not run in Chrome because this pass did not activate workflow or ingest sample documents.
-- Narrow viewport visual validation could not be completed with the current Chrome automation surface.
-- Live real-provider validation still needs a reachable provider registry profile, selected provider, adapter, and local secret reference.
-- macOS Tauri smoke was not rerun after the port reassignment.
-- Windows smoke validation remains pending and is required before any distribution work or discussion.
+## 3. Verification
 
-## 3. Current Objective
+Completed:
 
-Immediate goal:
+- `npm run lint`: passed.
+- `npm test`: passed with 10 test files, 1 skipped Postgres suite, 48 tests passed, and 2 skipped.
+- `npm run verify`: passed with lint, tests, and Vite production build.
+- Chrome smoke on `http://127.0.0.1:5184/`: passed for:
+  - app load with no console errors
+  - Settings navigation and all six sections render
+  - predefined landing areas render without a configured database
+  - Ingest inputs and submit buttons remain disabled without active workflow
+  - desktop viewport has no horizontal overflow
 
-- Carry forward the current dirty tree safely for the next implementation or validation pass.
+Chrome limitation:
 
-Intended finished state for the current workstream:
+- The Chrome backend could not resize the viewport; `window.resizeTo` was unavailable. Narrow/mobile validation remains unverified.
 
-- Provider runtime integration stays behind the shared Artifact Review boundary, provider output stays proposal-only, and local dev ports remain conflict-free and documented.
+Runtime note:
 
-Definition of done for the next pass:
+- `npm run dev` was started for validation. The service reported migrations skipped because `DATABASE_URL` was not configured and started on `127.0.0.1:4794`; Vite started on `127.0.0.1:5184`.
 
-- Confirm live registry-backed provider execution with a real local profile/secret path, then run browser and desktop smoke on `5184`/`4794` if user-facing validation is requested.
+## 4. Files To Open First
 
-## 4. Current State
+- `docs/plans/02 Reorganize Artifact Review Settings And Task Actions.md`
+- `service/src/http/server.ts`
+- `service/src/settings/renderSlots.ts`
+- `service/src/repositories/providerTasks.ts`
+- `service/src/providers/runtime.ts`
+- `src/App.tsx`
+- `src/lib/api.ts`
+- `src/styles.css`
+- `tests/http-provider-settings.test.ts`
+- `tests/repositories.test.ts`
 
-Working:
-
-- `npm run verify` passes.
-- Chrome smoke verifies the top-level `Document Review` / `Admin / Setup` split, review page removal of setup/admin panels, Admin-owned workflow/provider/settings/ingest controls, Admin ingest blocking when the workflow is inactive, and Focus mode hiding review chrome.
-- Shared local port registry checker passes after reserving Artifact Review `5184` and `4794`.
-- `.env.example`, Vite, service config, Tauri config, README, AGENTS runtime notes, setup docs, and verification docs all point to the new ports.
-- Local ignored `.env` was aligned to `ARTIFACT_REVIEW_SERVICE_PORT=4794` and `VITE_ARTIFACT_REVIEW_API_BASE=http://127.0.0.1:4794` so browser smoke reaches the current service port.
-- Provider readiness endpoints expose task-specific invocation context.
-- React displays provider readiness and `externalSend` at the AI Suggest invocation point.
-- Task-run detail preserves provider/profile/validation/external-send provenance.
-- Raw provider secrets remain outside Postgres.
-
-Partially Working:
-
-- Deterministic demo mode remains available on the same invocation path.
-- Real provider execution can run only when registry/profile, adapter availability, and local secret readiness are satisfied.
-
-Not Working Yet:
-
-- No confirmed live provider registry/adapter/secret execution in this dirty-tree checkpoint.
-- Windows smoke validation has not been run from this macOS workspace.
-
-Not Yet Verified:
-
-- Chrome document/component mutation smoke on `http://127.0.0.1:5184/` with an active workflow and at least one ingested document.
-- Narrow viewport Chrome validation for overlap and horizontal overflow.
-- `npm run tauri:dev` with desktop service health at `http://127.0.0.1:4794/health`.
-
-## 5. Active Constraints
+## 5. Current Constraints
 
 - Build Mode by default; do not release, publish, tag, package, install dependencies, delete files, or commit unless explicitly requested.
 - Never use `latest`; use numbered versions.
 - Use Chrome for browser automation unless explicitly asked otherwise.
-- Backend-owned workflow state remains authoritative; React renders service-derived workflow actions.
+- Backend-owned workflow state remains authoritative; React renders service-derived workflow actions and readiness.
 - Provider output must create proposed suggestions only; accepting a suggestion is a separate audited user action.
-- Future provider-backed tasks should use `TargetAppRuntimeService` or `RegistryBackedInvokeProvidersClient` from `@invoke-providers/client` before exposing additional render slots.
-- Do not store raw provider secrets in Postgres.
-- Before any future local port change, update `/Users/paulmarshall/Software Development/All Standards/local-port-registry.md`, keep `AGENTS.md` aligned, and rerun the registry checker.
+- Raw provider secrets must not be stored in Postgres.
+- Before future local port changes, update `/Users/paulmarshall/Software Development/All Standards/local-port-registry.md`, keep `AGENTS.md` aligned, and rerun the registry checker.
 
-## 6. Commands and Verification
+## 6. Next Actions
 
-Most recent verified commands:
+Recommended next validation:
 
-- `npm run verify`: passed with lint, tests, and Vite production build.
-- `python3 "/Users/paulmarshall/Software Development/All Standards/scripts/check-local-port-registry.py"`: passed; reports existing unrelated conflicts in other projects.
-- `git diff --check`: passed.
-- Live port checks for `5184` and `4794`: no listeners found after the reassignment.
-
-Useful next commands:
-
-- `npm run verify`
-- `npm run dev`
-- `npm run doctor`
-- `npm run tauri:dev`
-- `python3 "/Users/paulmarshall/Software Development/All Standards/scripts/check-local-port-registry.py"`
-
-Unverified areas:
-
-- Browser smoke for document/component edit, annotation, question, evidence, AI suggest, accept, reject, save, and export flows after explicit approval to activate workflow and ingest a test document.
-- Narrow browser viewport validation.
-- Desktop smoke on the new UI/service ports.
-- Live real-provider invocation with local secret readiness.
-
-## 7. Files to Open First
-
-- `docs/artifact-review-provider-registry-integration-review-v2.md`: source review requirements for the provider integration work.
-- `service/src/providers/runtime.ts`: service-owned provider runtime facade.
-- `service/src/http/server.ts`: readiness, provider settings, and AI suggestion endpoint wiring.
-- `service/migrations/004_block_future_provider_task_hooks.sql`: guardrails for future provider-backed task hooks.
-- `src/App.tsx`: Settings, provider readiness display, AI Suggest, and task-run provenance UI.
-- `src/styles.css`: current two-area shell, review canvas, inline review panels, admin setup layout, and responsive rules.
-- `src/lib/api.ts`: typed client surface for provider readiness and task-run details.
-- `AGENTS.md`: current local ports and project constraints.
-- `docs/completed-tasks.md`: append-only completed work ledger.
-
-## 8. Next Actions
-
-Next:
-
-- Validate live registry-backed provider execution with an active registry service, selected profile/provider, adapter, and local secret reference.
-- Run Chrome smoke on `http://127.0.0.1:5184/` when browser validation is requested.
-- Run macOS Tauri smoke and check `http://127.0.0.1:4794/health` when desktop validation is requested.
+- Run with a configured `DATABASE_URL`, activate the workflow, verify task routes load from Postgres, and check `component.inline.aiSuggest` actions with a sample ingested document.
+- Manually resize Chrome or use a supported viewport tool to validate Settings and review layouts at narrow widths.
+- Run macOS Tauri smoke through `npm run tauri:dev` if desktop UI validation is requested.
 
 Blocked:
 
 - Windows smoke validation cannot be completed from this macOS workspace.
 
-Later:
+## 7. Ready-Made Prompt For A New Thread
 
-- Commit the dirty tree only when the user explicitly asks for a checkpoint.
-
-## 9. Ready-Made Prompt for Starting a New Thread
-
-Read `handoff.md` as the hot-context source for `/Users/paulmarshall/Software Development/artifact-review`. Treat the current dirty tree as intentional and do not reset or discard changes. Review `docs/artifact-review-provider-registry-integration-review-v2.md`, `service/src/providers/runtime.ts`, `service/src/http/server.ts`, `src/App.tsx`, `src/lib/api.ts`, and `AGENTS.md` first. Continue from the provider-registry integration compliance and local port reassignment state: UI is `127.0.0.1:5184`, service is `127.0.0.1:4794`, and completed work history lives in `docs/completed-tasks.md`. Distinguish confirmed state from new recommendations, and do not commit, release, package, publish, install dependencies, or change ports unless explicitly approved.
+Read `handoff.md` as the hot-context source for `/Users/paulmarshall/Software Development/artifact-review`. Continue from the Settings workspace and provider task route metadata slice. The app now exposes service-backed Settings endpoints, predefined render slots, editable task routes, task-run diagnostics, and slot-driven component inline AI Suggest actions. Preserve the hard ingest gate until workflow activation, keep provider output proposal-only until accept/reject, and do not commit, release, package, publish, install dependencies, or change ports unless explicitly approved.
