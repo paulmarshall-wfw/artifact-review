@@ -117,6 +117,8 @@ Remaining:
 
 Purpose: produce reviewed artifacts after the review loop is durable.
 
+Completed:
+
 - Implement same-format export for `txt`, `md`, `html`, and URL snapshots.
 - Add optional JSON review bundle beside exports.
 - Use Tauri only for destination selection and reveal-in-folder.

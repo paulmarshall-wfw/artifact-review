@@ -237,6 +237,19 @@ dt {
   flex-wrap: wrap;
 }
 
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #465365;
+  white-space: nowrap;
+}
+
+.inline-check input {
+  width: auto;
+  margin: 0;
+}
+
 .page-label {
   font-size: 0.86rem;
 }

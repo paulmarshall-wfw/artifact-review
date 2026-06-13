@@ -4,9 +4,9 @@ dist/
 dist-service/
 target/
 src-tauri/target/
+src-tauri/gen/
 .env
 .env.local
 .env.*.local
 coverage/
 *.log
-

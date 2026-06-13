@@ -4,6 +4,11 @@ Append brief entries here when project work is completed. Keep this file concise
 
 ## 2026-06-13
 
+- Task: Build export slice.
+  Outcome: Implemented `/api/documents/:documentId/export` for same-format reviewed output across `txt`, `md`, `html`, `htm`, and URL snapshots, including optional beside-file JSON review bundles. React now exposes explicit Export and JSON bundle controls, browser/dev mode downloads returned files, and Tauri is limited to destination selection plus reveal-in-folder while the service owns export assembly and file writes.
+  Verification: `npm run verify` passed with 9 test files, 1 skipped Postgres suite, 38 tests passed, and 2 skipped; `cargo check --offline` generated `src-tauri/Cargo.lock` but stopped on the existing missing Tauri icon asset at `src-tauri/icons/icon.png`.
+  Traceability: Git branch `main`; no commit yet; changed export service/domain code, React API/UI code, Tauri command code, export tests, Cargo lock, gitignore, API/data/setup/sequence docs, completed-task ledger, and handoff.
+
 - Task: Build suggestion accept/reject slice.
   Outcome: Implemented `/api/ai-suggestions/:suggestionId/accept` and `/api/ai-suggestions/:suggestionId/reject`; accepting proposed suggestions now applies the proposed text through an audited `component_revisions` row with the AI suggestion ID, while rejecting suggestions preserves suggestion history without mutating component text. React suggestion cards now expose Accept and Reject actions for proposed suggestions and keep decided suggestions visible.
   Verification: `npm run lint` passed; `npm run verify` passed with 7 test files, 1 skipped Postgres suite, 33 tests passed, and 2 skipped; Vite production build passed.

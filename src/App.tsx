@@ -8,6 +8,7 @@ import {
   addEvidence,
   addQuestion,
   executeWorkflowAction,
+  exportDocument,
   getDocumentDetail,
   getDocumentWorkflowActions,
   getProviderReadiness,
@@ -25,6 +26,7 @@ import {
   type AutosaveSnapshot,
   type DocumentDetail,
   type DocumentSummary,
+  type ExportedFile,
   type DocumentWorkflowActions,
   type EvidenceKind,
   type ProviderReadiness,
@@ -32,6 +34,7 @@ import {
   type WorkflowStatus,
   type WorkflowValidationResult
 } from "./lib/api";
+import { isTauriRuntime, revealExportedFile, selectExportDestination } from "./lib/tauri";
 
 const fixtureDefinition = workflowFixture as unknown;
 const defaultFileContent =
@@ -53,6 +56,7 @@ type PendingKey =
   | "ai-suggest"
   | "ai-suggestion-action"
   | "save"
+  | "export"
   | "workflow-action";
 
 type FileForm = {
@@ -106,6 +110,7 @@ export function App() {
     evidenceKind: "note",
     evidenceValue: ""
   });
+  const [includeReviewBundle, setIncludeReviewBundle] = useState(false);
   const [lastAutosave, setLastAutosave] = useState<AutosaveSnapshot | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -435,6 +440,53 @@ export function App() {
     setNotice(`Saved version ${response.version.versionNumber}.`);
   }
 
+  async function handleExportDocument() {
+    if (!selectedDocumentId || !documentDetail) {
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+
+    let destinationPath: string | null = null;
+    if (isTauriRuntime()) {
+      destinationPath = await selectExportDestination(buildExportFileName(documentDetail.document));
+      if (!destinationPath) {
+        setNotice("Export canceled.");
+        return;
+      }
+    }
+
+    const response = await runPending("export", () =>
+      exportDocument(selectedDocumentId, {
+        destinationPath: destinationPath ?? undefined,
+        includeReviewBundle
+      })
+    );
+
+    if (response.written) {
+      if (response.export.path) {
+        await revealExportedFile(response.export.path);
+      }
+      setNotice(
+        response.reviewBundle?.path
+          ? `Exported ${response.export.fileName} and review bundle.`
+          : `Exported ${response.export.fileName}.`
+      );
+      return;
+    }
+
+    downloadExportedFile(response.export);
+    if (response.reviewBundle) {
+      downloadExportedFile(response.reviewBundle);
+    }
+    setNotice(
+      response.reviewBundle
+        ? `Downloaded ${response.export.fileName} and review bundle.`
+        : `Downloaded ${response.export.fileName}.`
+    );
+  }
+
   async function handleSuggestComponentRevision() {
     if (!selectedComponent || !selectedDocumentId) {
       return;
@@ -587,6 +639,20 @@ export function App() {
               onClick={() => reportActionError(handleSaveDocument)}
             >
               {isPending("save") ? "Saving" : "Save"}
+            </button>
+            <label className="inline-check">
+              <input
+                checked={includeReviewBundle}
+                type="checkbox"
+                onChange={(event) => setIncludeReviewBundle(event.target.checked)}
+              />
+              JSON bundle
+            </label>
+            <button
+              disabled={!selectedDocumentId || isPending("export")}
+              onClick={() => reportActionError(handleExportDocument)}
+            >
+              {isPending("export") ? "Exporting" : "Export"}
             </button>
           </div>
         </header>
@@ -1098,6 +1164,36 @@ function formatFromFileName(fileName: string): FileForm["format"] {
     return extension;
   }
   return "txt";
+}
+
+function buildExportFileName(document: DocumentSummary): string {
+  const extension =
+    document.sourceType === "url" || document.originalFormat === "url_snapshot"
+      ? "html"
+      : document.originalFormat === "md" || document.originalFormat === "html" || document.originalFormat === "htm"
+        ? document.originalFormat
+        : "txt";
+  const stem = document.name
+    .trim()
+    .replace(/[\\/:"*?<>|]+/g, "-")
+    .replace(/\.(txt|md|html|htm)$/i, "")
+    .slice(0, 120);
+
+  return `${stem || "artifact-review-export"}.${extension}`;
+}
+
+function downloadExportedFile(file: ExportedFile) {
+  if (!file.content) {
+    throw new Error(`Export ${file.fileName} did not include downloadable content.`);
+  }
+
+  const blob = new Blob([file.content], { type: file.contentType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = file.fileName;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 function RecordList({ emptyLabel, records }: { emptyLabel: string; records: string[] }) {

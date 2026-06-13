@@ -26,6 +26,7 @@ Artifact Review uses a local TypeScript service as the only HTTP API boundary fo
 | `POST` | `/api/components/:componentId/evidence` | Adds source/link/repo path/screenshot/note evidence and records an autosave snapshot. |
 | `PATCH` | `/api/components/:componentId/highlight` | Enables or disables component highlight state and records an autosave snapshot. |
 | `POST` | `/api/documents/:documentId/save` | Promotes current reviewed state to a new durable document version while preserving the imported source snapshot. |
+| `POST` | `/api/documents/:documentId/export` | Builds same-format reviewed output for `txt`, `md`, `html`, `htm`, and URL snapshots; optionally writes a JSON review bundle beside the export. If `destinationPath` is supplied, the service writes local files and returns paths. Otherwise it returns downloadable content. |
 | `POST` | `/api/components/:componentId/ai-suggestions` | Blocks when provider readiness fails; in explicit deterministic demo mode validates `suggest-component-revision` output, writes a task run, and stores a proposed `ai_suggestions` record without mutating component text. |
 | `POST` | `/api/ai-suggestions/:suggestionId/accept` | Accepts a proposed AI suggestion, updates component text, creates an audited `component_revisions` row with `edit_source = accepted_ai_suggestion`, marks the suggestion accepted, and writes an autosave snapshot. |
 | `POST` | `/api/ai-suggestions/:suggestionId/reject` | Rejects a proposed AI suggestion, preserves suggestion history, writes an autosave snapshot, and does not mutate component text or create a component revision. |
@@ -39,7 +40,6 @@ These routes are reserved by the MVP plan and should be implemented incrementall
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/documents/:documentId/export` | Write reviewed output and optional JSON review bundle. |
 | `PATCH` | `/api/workflow/active` | Replace or deactivate the active document workflow after import/activation UX exists. |
 
 ## Response Rules
@@ -65,7 +65,9 @@ These routes are reserved by the MVP plan and should be implemented incrementall
 - Accepting an AI suggestion applies `ai_suggestions.proposed_text` as component text and records the suggestion ID on the created component revision.
 - Rejecting an AI suggestion updates only suggestion decision state and autosave history; it does not update `review_components` or write `component_revisions`.
 - Review mutation endpoints write autosave snapshots to `autosave_snapshots`; they do not update `document_versions.source_snapshot` or `document_versions.current_snapshot`.
-- Document save creates a new `document_versions` row with the original imported source snapshot preserved and a JSON review-state `current_snapshot`. Same-format export remains reserved for `/api/documents/:documentId/export`.
+- Document save creates a new `document_versions` row with the original imported source snapshot preserved and a JSON review-state `current_snapshot`.
+- Document export accepts `{ destinationPath?: string, includeReviewBundle?: boolean }`. Missing database returns `409 database_not_configured`; missing documents return `404 document_not_found`; malformed payloads return `422 invalid_export_request`; source reconstruction failures return `409 export_assembly_failed`.
+- Same-format export reconstructs reviewed output by applying component `currentText` to the imported source snapshot through stored source ranges. `txt` and `md` exports append review notes in matching text/Markdown form; `html`, `htm`, and URL snapshot exports embed review notes plus JSON metadata into the HTML. The optional JSON review bundle includes document identity, source/latest version metadata, components, and review records.
 
 ## Tauri Command Boundary
 

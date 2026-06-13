@@ -4,17 +4,18 @@
 
 - Project name: Artifact Review
 - Handoff type: implementation handoff
-- Updated timestamp UTC: 2026-06-13T00:34:41Z
+- Updated timestamp UTC: 2026-06-13T00:49:14Z
 - Prepared by: Codex
 - Repository, workspace, or folder: `/Users/paulmarshall/Software Development/artifact-review`
-- Branch or working context: Git branch `main`; current HEAD `b0876e6`; branch is 12 commits ahead of `origin/main`
-- Session scope: built suggestion accept/reject slice.
+- Branch or working context: Git branch `main`; current HEAD `a15e70f`
+- Session scope: built Build Slice 6 export.
 
 ### Checkpoint Status
 
-- Git HEAD: `b0876e6`
+- Git HEAD: `a15e70f`
 - Working tree: dirty
 - Dirty files intentionally in scope:
+  - `.gitignore`
   - `docs/api-contract.md`
   - `docs/completed-tasks.md`
   - `docs/data-model.md`
@@ -22,187 +23,123 @@
   - `docs/setup-readiness.md`
   - `handoff.md`
   - `service/src/http/server.ts`
-  - `service/src/repositories/aiSuggestions.ts`
+  - `src-tauri/src/lib.rs`
   - `src/App.tsx`
   - `src/lib/api.ts`
   - `src/styles.css`
-  - `tests/http-review.test.ts`
 - New files intentionally in scope:
-  - None
-- Dirty files intentionally out of scope:
-  - None
-- Untracked files intentionally in scope:
-  - None
-- Untracked files intentionally out of scope:
-  - `docs/Artefact-ReviewBuildOut.txt`
-- Canonical files described:
-  - `docs/completed-tasks.md`
-  - `handoff.md`
+  - `service/src/domain/exporter.ts`
+  - `src-tauri/Cargo.lock`
+  - `src/lib/tauri.ts`
+  - `tests/exporter.test.ts`
+  - `tests/http-export.test.ts`
+- Generated files intentionally ignored:
+  - `src-tauri/gen/`
 - Last verification:
-  - command: `npm run verify`
-  - result: passed with 7 test files, 1 skipped Postgres suite, 33 tests passed, and 2 skipped; lint and Vite build also passed
-  - timestamp UTC: 2026-06-13T00:34:41Z
-- Browser validation:
-  - Chrome opened `http://127.0.0.1:5182/` against the local dev stack.
-  - Confirmed the workspace rendered provider/database readiness blockers and no Chrome console errors.
-  - Limitation: `DATABASE_URL` was not configured, so document creation, populated suggestion cards, and accept/reject browser data flow were verified by automated tests rather than live browser data.
-- Local dev startup:
-  - command: `npm run dev`
-  - result: Vite reported `http://127.0.0.1:5182/`; service reported startup on `127.0.0.1:4793`; `DATABASE_URL` was unset so migrations were skipped
-- Handoff freshness: fresh-to-dirty-tree
-- Safe-to-continue basis: current `HEAD`, scoped dirty files, and verification evidence are accounted for; no commit, tag, release, install, or dependency change was made.
+  - `npm run verify`: passed
+  - `npm run lint`: passed
+  - `npm test`: passed with 9 test files, 1 skipped Postgres suite, 38 tests passed, and 2 skipped
+  - `npm run build`: passed
+  - `cargo check --offline`: blocked before checking app command code because `src-tauri/icons/icon.png` is missing
+- Browser validation: not run for this slice.
+- Tauri desktop validation: not run; native compile is blocked by the missing Tauri icon asset.
 - Next checkpoint action: leave dirty intentionally unless the user asks to commit.
 
 ## 2. Executive Summary
 
-Current focus is Artifact Review suggestion accept/reject wiring while preserving proposal-only AI generation.
+Build Slice 6 is implemented.
 
-Confirmed complete now:
+Completed now:
 
-- Numbered migration `003_provider_task_assets.sql` seeds app-owned provider task definitions, prompt versions, structured output schemas, render slots, and processing hooks.
-- Provider readiness now checks selected profile precedence, registry profile/provider lookup, task assets, provider capability, local secret availability, adapter availability, no-fallback policy, and deterministic demo mode.
-- Selected provider profile resolution uses saved `selectedProviderProfileKey` first, then first-run `INVOKE_PROVIDERS_PROFILE`; saved missing profiles block rather than falling back.
-- `POST /api/components/:componentId/ai-suggestions` now creates a task run and proposed `ai_suggestions` record in explicit deterministic demo mode without mutating component text.
-- `POST /api/ai-suggestions/:suggestionId/accept` now accepts proposed suggestions, applies proposed text through an audited `component_revisions` row with `edit_source = accepted_ai_suggestion`, records the AI suggestion ID on the revision, marks the suggestion accepted, and writes an autosave snapshot.
-- `POST /api/ai-suggestions/:suggestionId/reject` now marks proposed suggestions rejected, preserves suggestion history, writes an autosave snapshot, and does not mutate component text or create component revisions.
-- Document detail now returns AI suggestions, and the React inspector can request and display proposed suggestions with confidence, rationale, warnings, and task-run ID.
-- Typed React client calls for:
-  - setup readiness and provider readiness
-  - workflow status, workflow definition validation, and workflow activation
-  - document list and document detail
-  - file and URL ingest
-  - component text autosave, annotations, questions, evidence, highlights, and document save
-  - document workflow actions, component AI suggestions, and suggestion accept/reject
-- Workflow setup UI validates and imports/activates the repo-stored fixture.
-- Ingest forms remain disabled until an active document workflow exists.
-- File ingest now supports selecting local `txt`, `md`, `html`, and `htm` files in the browser and loading their content into the service-backed ingest flow.
-- URL snapshot ingest remains wired for caller-supplied snapshot HTML or service-side URL fetch.
-- Review workspace now renders repository-backed document rows, document detail, grouped review components, search, selected-component focus, expand/collapse controls, inline detail/highlight controls, open/closed detail drawer state, autosave/save feedback, review records, and backend-derived workflow actions.
-- Provider suggestion button remains readiness-gated and creates proposals only when readiness passes.
-- React suggestion cards now expose Accept and Reject actions for proposed suggestions and keep accepted/rejected suggestions visible as history.
+- `POST /api/documents/:documentId/export` builds same-format reviewed output for `txt`, `md`, `html`, `htm`, and URL snapshots.
+- Export reconstruction applies each review component's current text to the imported source snapshot through stored source ranges.
+- `txt` and `md` exports append review notes in matching text/Markdown form.
+- `html`, `htm`, and URL snapshot exports embed review notes plus JSON metadata in the HTML.
+- Optional JSON review bundles include document identity, source/latest version metadata, components, annotations, questions, evidence, highlights, and AI suggestions.
+- When `destinationPath` is supplied, the TypeScript service writes the export and optional beside-file review bundle.
+- When no destination is supplied, the endpoint returns downloadable content for browser/dev mode.
+- React exposes explicit Export and JSON bundle controls in the review top bar.
+- Tauri is limited to export destination selection and reveal-in-folder commands; it does not assemble export content or mutate documents.
+- Added export round-trip and HTTP endpoint tests.
+- Added `src-tauri/Cargo.lock` after native dependency resolution and ignored generated Tauri schema output under `src-tauri/gen/`.
 
-Incomplete now:
+Still incomplete or blocked:
 
-- `state-workflow-runtime` is not installed or wired because dependency installation has not been explicitly approved.
-- Real registry provider adapter execution is still blocked until provider runtime adapters are explicitly approved and installed.
-- Same-format export, database-backed Chrome UI validation, and Tauri validation are still pending.
+- `state-workflow-runtime` is not installed or wired.
+- Real registry provider adapter execution is still blocked until provider runtime dependencies are explicitly approved and installed.
+- Database-backed Chrome UI validation with populated review/suggestion data is still pending.
+- `npm run tauri:dev` and native desktop validation are blocked until the missing icon asset is added or the Tauri config is adjusted.
 
-Completed work history is tracked in `docs/completed-tasks.md`; do not duplicate it here.
+## 3. Current State
 
-## 3. Current Objective
-
-Continue after the suggestion accept/reject slice.
-
-Definition of done for the next workstream:
-
-- Run database-backed Chrome/browser UI validation once a reachable dev server with `DATABASE_URL` and populated suggestion history is available.
-- Run `npm run tauri:dev` after browser UI validation.
-- Wire real registry provider adapter execution once the provider runtime dependency is explicitly approved and installed.
-- Preserve backend-owned workflow state; React must keep rendering allowed actions from service responses.
-- Preserve stable component IDs, source mappings, original text hashes, and imported source snapshots.
-- Do not install `state-workflow-runtime`, provider runtime packages, or other dependencies unless explicitly approved.
-
-## 4. Current State
-
-### Working
+Working:
 
 - `npm run verify` passes.
 - Default tests skip the Postgres integration suite when `ARTIFACT_REVIEW_TEST_DATABASE_URL` is absent.
-- Service startup runs migrations when `DATABASE_URL` is configured.
-- `/api/workflow/status`, `/api/workflow/definitions/validate`, `/api/workflow/activate`, `/api/workflow/documents/:documentId/actions`, and `/api/workflow/documents/:documentId/actions/:actionId` are implemented and covered.
-- `/api/ingest/file` supports `txt`, `md`, `html`, and `htm` when database and active workflow are configured.
-- `/api/ingest/url` supports caller-supplied snapshot HTML or fetched `http`/`https` URL snapshots.
-- React file ingest accepts local file selection for `txt`, `md`, `html`, and `htm`, then submits the loaded text to `/api/ingest/file`.
-- `/api/components/:componentId` edits current component text and writes an audit revision.
-- Annotation, question, evidence, and highlight endpoints write review records and autosave snapshots.
-- `/api/documents/:documentId/save` creates a new review-state document version while preserving the imported source snapshot.
-- React calls the current API surface through `src/lib/api.ts`.
-- React workflow setup UI can validate and activate the bundled fixture.
-- React ingest UI is blocked until `GET /api/workflow/status` reports an active workflow.
-- React review UI supports component search, section grouping, expand/collapse, selected-component focus, inline highlight/detail controls, detail drawer open/close state, and visible unsaved draft state.
-- Provider task assets are seeded by `003_provider_task_assets.sql`.
-- `/api/provider-readiness` and `/api/provider-readiness/tasks/:taskKey` use registry/profile/provider/task readiness context.
-- `/api/components/:componentId/ai-suggestions` stores proposed suggestions only in explicit deterministic demo mode.
-- `/api/ai-suggestions/:suggestionId/accept` applies proposed suggestion text through an audited component revision and autosave snapshot.
-- `/api/ai-suggestions/:suggestionId/reject` records the rejected suggestion decision and autosave snapshot without mutating component text.
-- React component detail shows provider readiness, proposed AI suggestions, and accept/reject controls for proposed items.
+- File and URL ingest remain workflow-gated.
+- Review mutations, autosave snapshots, save promotion, AI proposal creation, and AI accept/reject behavior remain covered.
+- Export endpoint returns stable errors for missing database, missing documents, invalid payloads, and source reconstruction failures.
+- Browser/dev exports download returned files; desktop exports ask Tauri for a destination and then ask the service to write files.
 
-### Partially Working
+Not yet verified:
 
-- Workflow operations are backend-owned but not yet backed by `state-workflow-runtime`.
-- Provider readiness is visible and gates UI affordances; deterministic demo suggestions work, while real provider adapter execution remains blocked.
-- Save stores JSON review-state snapshots; same-format export is intentionally deferred to Build Slice 6.
+- Live export from a database-backed browser session.
+- Tauri destination picker and reveal-in-folder in a running desktop shell.
+- Full Tauri compile/run because `src-tauri/icons/icon.png` is missing.
 
-### Not Working Yet
-
-- `state-workflow-runtime` adapter remains blocked until dependency installation is explicitly approved.
-- Same-format export.
-- Real registry provider adapter execution.
-
-### Not Yet Verified
-
-- Browser UI validation with a configured database, active workflow, real ingested document, and populated suggestion history.
-- `npm run tauri:dev`
-- Tauri desktop validation.
-
-## 5. Active Constraints
+## 4. Active Constraints
 
 - Build Mode by default; do not release, publish, tag, package, install dependencies, or commit unless explicitly requested.
 - Never use `latest`; use numbered versions.
 - Use Chrome for browser automation unless explicitly asked otherwise.
-- Artifact Review is an `invoke-providers-for-tasks` target app; the shared registry owns provider catalog/profile/config records.
-- Artifact Review owns selected profile settings, tasks, prompts, schemas, hooks, task runs, suggestions, documents, workflow transitions, and domain mutations.
+- Backend-owned workflow state remains authoritative; React renders service-derived workflow actions.
 - Provider output must create proposed suggestions only; accepting a suggestion is a separate audited user action.
-- Backend-owned workflow state is authoritative; React renders allowed actions from the service.
+- Tauri should stay limited to native capabilities such as destination selection and reveal-in-folder.
 - Do not store raw provider secrets in Postgres.
-- Before changing local ports, update `/Users/paulmarshall/Software Development/All Standards/local-port-registry.md`.
 
-## 6. Commands and Verification
+## 5. Commands and Verification
 
 Most recent verified commands:
 
 - `npm run lint`: passed.
-- `npm run verify`: passed with 7 test files, 1 skipped Postgres suite, 33 tests passed, and 2 skipped; Vite production build passed.
-- `npm run dev`: reported Vite on `http://127.0.0.1:5182/` and service startup on `127.0.0.1:4793`; Chrome smoke validation passed with no console errors.
+- `npm test`: passed with 9 test files, 1 skipped Postgres suite, 38 tests passed, and 2 skipped.
+- `npm run build`: passed.
+- `npm run verify`: passed with 9 test files, 1 skipped Postgres suite, 38 tests passed, and 2 skipped.
+- `cargo check --offline`: failed before app command checking because Tauri codegen could not open `src-tauri/icons/icon.png`.
 
 Environment notes:
 
-- `DATABASE_URL` was unset for the default verification and dev-start path.
-- Repo-local handoff helper scripts are absent; freshness is manually grounded from `git status`, `HEAD`, file inspection, and verification evidence.
+- `DATABASE_URL` was unset for default verification.
+- `cargo check --offline` generated `src-tauri/Cargo.lock` and generated Tauri schema output under `src-tauri/gen/`; `src-tauri/gen/` is now ignored.
 
-## 7. Files to Open First
+## 6. Files to Open First
 
 - `AGENTS.md`: project constraints and commands.
 - `docs/implementation-sequence.md`: slice order and remaining work.
-- `docs/api-contract.md`: current and reserved service endpoints.
-- `src/lib/api.ts`: React API client types and calls.
-- `src/App.tsx`: React workflow setup, file/URL ingest, review, grouped components, drawer state, mutation, save, and workflow-action UI.
-- `src/styles.css`: current workspace layout.
-- `service/src/http/server.ts`: workflow, ingest, review mutation, autosave, and save API implementation.
-- `service/src/providers/readiness.ts`: selected-profile, registry, task asset, and adapter readiness checks.
-- `service/src/providers/registry.ts`: narrow registry HTTP lookup for profiles and providers.
-- `service/src/repositories/providerTasks.ts`: app-owned task/prompt/schema/hook asset reads.
-- `service/migrations/003_provider_task_assets.sql`: seeded MVP provider task assets.
-- `tests/http-review.test.ts`: review mutation, autosave, and save endpoint coverage.
-- `tests/http-ingest.test.ts`: ingest HTTP coverage.
-- `tests/http-workflow.test.ts`: workflow endpoint coverage.
+- `docs/api-contract.md`: current service endpoints and error behavior.
+- `service/src/domain/exporter.ts`: same-format export reconstruction and bundle assembly.
+- `service/src/http/server.ts`: export endpoint, ingest, review mutation, save, and workflow API implementation.
+- `src/lib/api.ts`: typed React API client.
+- `src/lib/tauri.ts`: frontend bridge for Tauri destination/reveal commands.
+- `src/App.tsx`: review workspace and export UI.
+- `src-tauri/src/lib.rs`: native service URL, destination picker, and reveal commands.
+- `tests/exporter.test.ts`: format reconstruction tests.
+- `tests/http-export.test.ts`: export endpoint tests.
 - `docs/completed-tasks.md`: append-only completed work ledger.
 
-## 8. Next Actions
+## 7. Next Actions
 
 Next:
 
-- Run Chrome/browser UI validation once a reachable dev server with a configured database and populated suggestion history is available.
-- Run `npm run tauri:dev` after browser UI validation.
+- Add or configure the missing Tauri icon asset so `cargo check --offline` and `npm run tauri:dev` can reach the app command layer.
+- Run database-backed Chrome validation with an active workflow, ingested document, review records, and export.
+- Run `npm run tauri:dev` and validate destination selection plus reveal-in-folder.
 
 Blocked or deferred:
 
 - Real provider adapter execution remains blocked until provider runtime dependencies are explicitly approved and installed.
-- Same-format export remains Build Slice 6.
+- `state-workflow-runtime` remains deferred until dependency installation is explicitly approved.
 
-- Implement same-format export.
-- Run Tauri desktop validation for native shell behavior.
+## 8. Ready-Made Prompt for Starting a New Thread
 
-## 9. Ready-Made Prompt for Starting a New Thread
-
-Read `handoff.md` as the hot-context source for `/Users/paulmarshall/Software Development/artifact-review`. Treat the current dirty tree as intentional and do not reset or discard changes. Review `AGENTS.md`, `docs/implementation-sequence.md`, `docs/api-contract.md`, `src/lib/api.ts`, `src/App.tsx`, `src/styles.css`, `service/src/http/server.ts`, `service/src/repositories/aiSuggestions.ts`, `service/src/providers/readiness.ts`, `service/src/providers/registry.ts`, `service/src/repositories/providerTasks.ts`, and `service/migrations/003_provider_task_assets.sql` first. Continue after the suggestion accept/reject slice. Preserve backend-owned workflow state, stable component IDs, source mappings, original text hashes, immutable imported source snapshots, and provider proposal-only boundaries. Do not install dependencies, commit, release, or wire provider/runtime packages unless explicitly approved.
+Read `handoff.md` as the hot-context source for `/Users/paulmarshall/Software Development/artifact-review`. Treat the current dirty tree as intentional and do not reset or discard changes. Continue after Build Slice 6 export. Preserve the service-owned export boundary: TypeScript service assembles and writes exports; Tauri only selects destinations and reveals exported files. Before Tauri validation, address the missing `src-tauri/icons/icon.png` asset or adjust the Tauri config. Do not install dependencies, commit, release, or wire provider/runtime packages unless explicitly approved.

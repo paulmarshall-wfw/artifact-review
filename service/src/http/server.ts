@@ -1,8 +1,11 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import cors from "cors";
 import express from "express";
 import type pg from "pg";
 import { z } from "zod";
 import type { AppConfig } from "../config/env.js";
+import { buildSameFormatExport, ExportAssemblyError } from "../domain/exporter.js";
 import { checkDatabase } from "../db/pool.js";
 import { combineReadiness } from "../domain/readiness.js";
 import { parseHtmlToComponents, parseMarkdownToComponents, parsePlainTextToComponents } from "../domain/parser.js";
@@ -58,6 +61,11 @@ const highlightRequestSchema = z.object({
 });
 
 const suggestComponentRevisionTaskKey = "suggest-component-revision";
+
+const exportDocumentRequestSchema = z.object({
+  destinationPath: z.string().min(1).optional(),
+  includeReviewBundle: z.boolean().default(false)
+});
 
 function toSafeJson(value: unknown): JsonValue {
   return JSON.parse(JSON.stringify(value)) as JsonValue;
@@ -160,6 +168,35 @@ async function buildReviewStateSnapshot(
     evidenceSources,
     highlights
   });
+}
+
+function reviewBundlePathForDestination(destinationPath: string): string {
+  const parsedPath = path.parse(destinationPath);
+  return path.join(parsedPath.dir, `${parsedPath.name}.review-bundle.json`);
+}
+
+async function writeExportFiles(
+  destinationPath: string,
+  exportContent: string,
+  reviewBundleContent: string | null
+): Promise<{ exportPath: string; reviewBundlePath: string | null }> {
+  await mkdir(path.dirname(destinationPath), { recursive: true });
+  await writeFile(destinationPath, exportContent, "utf8");
+
+  if (!reviewBundleContent) {
+    return {
+      exportPath: destinationPath,
+      reviewBundlePath: null
+    };
+  }
+
+  const reviewBundlePath = reviewBundlePathForDestination(destinationPath);
+  await writeFile(reviewBundlePath, reviewBundleContent, "utf8");
+
+  return {
+    exportPath: destinationPath,
+    reviewBundlePath
+  };
 }
 
 function buildDemoSuggestComponentRevisionOutput(
@@ -939,6 +976,98 @@ export function createServer(config: AppConfig, pool: pg.Pool | null) {
         componentCount: components.length,
         previousVersionNumber
       }
+    });
+  });
+
+  app.post("/api/documents/:documentId/export", async (request, response) => {
+    if (!repositories) {
+      response.status(409).json({
+        error: "database_not_configured",
+        message: "Configure DATABASE_URL before exporting documents."
+      });
+      return;
+    }
+
+    const parsedRequest = exportDocumentRequestSchema.safeParse(request.body ?? {});
+    if (!parsedRequest.success) {
+      response.status(422).json({
+        error: "invalid_export_request",
+        issues: parsedRequest.error.issues.map((issue) => `${issue.path.join(".") || "request"}: ${issue.message}`)
+      });
+      return;
+    }
+
+    const document = await repositories.documents.getDocument(request.params.documentId);
+    if (!document) {
+      response.status(404).json({
+        error: "document_not_found",
+        documentId: request.params.documentId
+      });
+      return;
+    }
+
+    const [versions, components, annotations, questions, evidenceSources, highlights, aiSuggestions] = await Promise.all([
+      repositories.documents.getDocumentVersions(document.id),
+      repositories.documents.getReviewComponents(document.id),
+      repositories.review.listAnnotations(document.id),
+      repositories.review.listQuestions(document.id),
+      repositories.review.listEvidenceSources(document.id),
+      repositories.review.listHighlights(document.id),
+      repositories.aiSuggestions.listSuggestionsForDocument(document.id)
+    ]);
+
+    let exportResult;
+    try {
+      exportResult = buildSameFormatExport({
+        document,
+        versions,
+        components,
+        review: {
+          annotations,
+          questions,
+          evidenceSources,
+          highlights,
+          aiSuggestions
+        }
+      });
+    } catch (error) {
+      if (error instanceof ExportAssemblyError) {
+        response.status(409).json({
+          error: "export_assembly_failed",
+          documentId: document.id,
+          message: error.message
+        });
+        return;
+      }
+
+      throw error;
+    }
+
+    const reviewBundleContent = parsedRequest.data.includeReviewBundle ? exportResult.reviewBundle.content : null;
+    const writtenPaths = parsedRequest.data.destinationPath
+      ? await writeExportFiles(parsedRequest.data.destinationPath, exportResult.content, reviewBundleContent)
+      : null;
+
+    response.status(201).json({
+      document,
+      written: Boolean(writtenPaths),
+      export: {
+        format: exportResult.format,
+        fileName: exportResult.fileName,
+        contentType: exportResult.contentType,
+        byteLength: Buffer.byteLength(exportResult.content, "utf8"),
+        path: writtenPaths?.exportPath ?? null,
+        content: writtenPaths ? undefined : exportResult.content
+      },
+      reviewBundle: parsedRequest.data.includeReviewBundle
+        ? {
+            fileName: exportResult.reviewBundle.fileName,
+            contentType: exportResult.reviewBundle.contentType,
+            byteLength: Buffer.byteLength(exportResult.reviewBundle.content, "utf8"),
+            path: writtenPaths?.reviewBundlePath ?? null,
+            content: writtenPaths ? undefined : exportResult.reviewBundle.content
+          }
+        : null
     });
   });
 

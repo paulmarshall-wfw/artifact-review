@@ -239,6 +239,28 @@ export type SaveDocumentResponse = {
   };
 };
 
+export type ExportDocumentRequest = {
+  destinationPath?: string;
+  includeReviewBundle: boolean;
+};
+
+export type ExportedFile = {
+  fileName: string;
+  contentType: string;
+  byteLength: number;
+  path: string | null;
+  content?: string;
+};
+
+export type ExportDocumentResponse = {
+  document: DocumentSummary;
+  written: boolean;
+  export: ExportedFile & {
+    format: "txt" | "md" | "html" | "htm" | "url_snapshot";
+  };
+  reviewBundle: ExportedFile | null;
+};
+
 export type ExecuteWorkflowActionResponse = {
   document: DocumentSummary;
   transition: {
@@ -456,6 +478,16 @@ export async function setHighlight(
 export async function saveDocument(documentId: string): Promise<SaveDocumentResponse> {
   return requestJson<SaveDocumentResponse>(`/api/documents/${encodeURIComponent(documentId)}/save`, {
     method: "POST"
+  });
+}
+
+export async function exportDocument(
+  documentId: string,
+  payload: ExportDocumentRequest
+): Promise<ExportDocumentResponse> {
+  return requestJson<ExportDocumentResponse>(`/api/documents/${encodeURIComponent(documentId)}/export`, {
+    method: "POST",
+    ...jsonBody(payload)
   });
 }
 

@@ -70,7 +70,8 @@ Review mutation endpoints now write app-owned review records through the service
 - `POST /api/ai-suggestions/:suggestionId/reject` updates suggestion decision state while preserving history and leaving component text untouched.
 - Each review mutation writes an `autosave_snapshots` row with the changed component ID, source mapping, current text, and mutation payload.
 - Autosave snapshots do not mutate `document_versions`; imported source snapshots remain immutable.
-- `POST /api/documents/:documentId/save` creates a new `document_versions` row, preserves the first imported `source_snapshot`, and stores the reviewed component/review-record state as a JSON `current_snapshot` until same-format export is implemented.
+- `POST /api/documents/:documentId/save` creates a new `document_versions` row, preserves the first imported `source_snapshot`, and stores the reviewed component/review-record state as a JSON `current_snapshot`.
+- `POST /api/documents/:documentId/export` reconstructs same-format reviewed output from the imported `source_snapshot` plus current review components. `txt` and `md` exports append review notes in matching text formats; `html`, `htm`, and URL snapshot exports embed review notes and JSON metadata in the HTML. When enabled, the optional JSON review bundle carries document, source/latest version, component, and review-record data beside the reviewed artifact.
 
 The `state-workflow-runtime` storage adapter has not been installed or wired yet. Until then, the service validates the same explicit workflow shape and derives allowed user actions from the active app-owned definition.
 
